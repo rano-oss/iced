@@ -1,4 +1,6 @@
 //! Display a dropdown list of selectable values.
+use iced_renderer::core::text::LineHeight;
+
 use crate::container;
 use crate::core::alignment;
 use crate::core::event::{self, Event};
@@ -663,8 +665,8 @@ pub fn draw<'a, T, Renderer>(
             Renderer::ICON_FONT,
             Renderer::ARROW_DOWN_ICON,
             *size,
-            text::LineHeight::default(),
-            text::Shaping::Basic,
+            LineHeight::default(),
+            text::Shaping::Advanced,
         )),
         Handle::Static(Icon {
             font,

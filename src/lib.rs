@@ -190,7 +190,7 @@ pub use style::theme;
 pub use crate::core::alignment;
 pub use crate::core::gradient;
 pub use crate::core::{
-    color, Alignment, Background, BorderRadius, Color, ContentFit, Degrees,
+    color, id, Alignment, Background, BorderRadius, Color, ContentFit, Degrees,
     Gradient, Length, Padding, Pixels, Point, Radians, Rectangle, Size, Vector,
 };
 
