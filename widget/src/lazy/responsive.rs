@@ -83,7 +83,12 @@ where
         self.size = new_size;
         self.layout = None;
 
-        tree.diff(&self.element);
+        tree.diff(&mut self.element);
+
+        self.layout = Some(self
+            .element
+            .as_widget()
+            .layout(renderer, &layout::Limits::new(Size::ZERO, self.size)));
     }
 
     fn resolve<R, T>(
@@ -308,6 +313,40 @@ where
 
         has_overlay
             .map(|position| overlay::Element::new(position, Box::new(overlay)))
+    }
+
+    #[cfg(feature = "a11y")]
+    fn a11y_nodes(
+        &self,
+        layout: Layout<'_>,
+        tree: &Tree,
+
+        cursor_position: Point,
+    ) -> iced_accessibility::A11yTree {
+        use std::rc::Rc;
+
+        let tree = tree.state.downcast_ref::<Rc<RefCell<Option<Tree>>>>();
+        if let Some(tree) = tree.borrow().as_ref() {
+            self.content.borrow().element.as_widget().a11y_nodes(
+                layout,
+                &tree.children[0],
+                cursor_position,
+            )
+        } else {
+            iced_accessibility::A11yTree::default()
+        }
+    }
+
+    fn id(&self) -> Option<core::widget::Id> {
+        self.content.borrow().element.as_widget().id()
+    }
+
+    fn set_id(&mut self, _id: iced_accessibility::Id) {
+        self.content
+            .borrow_mut()
+            .element
+            .as_widget_mut()
+            .set_id(_id);
     }
 }
 
