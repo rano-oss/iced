@@ -7,6 +7,7 @@ use crate::text;
 use crate::widget::Tree;
 use crate::{Color, Element, Layout, Length, Pixels, Rectangle, Size, Widget};
 
+use log::debug;
 use std::borrow::Cow;
 
 pub use text::{LineHeight, Shaping};
@@ -253,6 +254,11 @@ pub fn draw<Renderer>(
     Renderer: text::Renderer,
 {
     let bounds = layout.bounds();
+
+    if bounds.width <= 0.0 || bounds.height <= 0.0 {
+        debug!("Skipping text with no area");
+        return;
+    }
 
     let x = match horizontal_alignment {
         alignment::Horizontal::Left => bounds.x,
