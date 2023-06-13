@@ -242,7 +242,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: Point,
+        _cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},

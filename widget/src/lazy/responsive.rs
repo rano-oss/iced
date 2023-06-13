@@ -84,11 +84,6 @@ where
         self.layout = None;
 
         tree.diff(&mut self.element);
-
-        self.layout = Some(self
-            .element
-            .as_widget()
-            .layout(renderer, &layout::Limits::new(Size::ZERO, self.size)));
     }
 
     fn resolve<R, T>(
@@ -321,7 +316,7 @@ where
         layout: Layout<'_>,
         tree: &Tree,
 
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use std::rc::Rc;
 

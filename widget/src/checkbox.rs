@@ -372,7 +372,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{
@@ -382,7 +382,7 @@ where
         };
 
         let bounds = layout.bounds();
-        let is_hovered = bounds.contains(cursor_position);
+        let is_hovered = cursor_position.is_over(bounds);
         let Rectangle {
             x,
             y,

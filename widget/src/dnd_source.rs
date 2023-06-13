@@ -175,7 +175,7 @@ where
         theme: &<Renderer as crate::core::Renderer>::Theme,
         renderer_style: &crate::core::renderer::Style,
         layout: crate::core::Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         viewport: &crate::core::Rectangle,
     ) {
         self.content.as_widget().draw(
@@ -232,7 +232,7 @@ where
         tree: &mut Tree,
         event: Event,
         layout: layout::Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
@@ -321,6 +321,10 @@ where
             }
         }
 
+        let Some(cursor_position) = cursor_position.position() else {
+            return captured;
+        };
+
         if cursor_position.x > 0.0
             && cursor_position.y > 0.0
             && !layout.bounds().contains(cursor_position)
@@ -372,7 +376,7 @@ where
         &self,
         tree: &Tree,
         layout: layout::Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {

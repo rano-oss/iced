@@ -18,8 +18,8 @@ use crate::core::{
 use crate::runtime::Command;
 
 pub use crate::style::scrollable::{Scrollbar, Scroller, StyleSheet};
-pub use operation::scrollable::{AbsoluteOffset, RelativeOffset};
 use iced_renderer::core::widget::OperationOutputWrapper;
+pub use operation::scrollable::{AbsoluteOffset, RelativeOffset};
 
 /// A widget that can vertically display an infinite amount of content with a
 /// scrollbar.
@@ -390,7 +390,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},
@@ -406,7 +406,7 @@ where
         );
 
         let window = layout.bounds();
-        let is_hovered = window.contains(cursor_position);
+        let is_hovered = cursor_position.is_over(window);
         let Rectangle {
             x,
             y,
@@ -471,7 +471,7 @@ where
                 }))
             {
                 let scrollbar_bounds = scrollbar.total_bounds;
-                let is_hovered = scrollbar_bounds.contains(cursor_position);
+                let is_hovered = cursor_position.is_over(scrollbar_bounds);
                 let Rectangle {
                     x,
                     y,
@@ -556,7 +556,7 @@ pub fn scroll_to<Message: 'static>(
     id: Id,
     offset: AbsoluteOffset,
 ) -> Command<Message> {
-    Command::widget(operation::scrollable::scroll_to(id.0, offset))
+    Command::widget(operation::scrollable::scroll_to(id, offset))
 }
 
 /// Computes the layout of a [`Scrollable`].

@@ -275,7 +275,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        p: Point,
+        p: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         let c_layout = layout.children().next().unwrap();
         let c_state = &state.children[0];

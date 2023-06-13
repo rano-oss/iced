@@ -495,7 +495,7 @@ where
         &self,
         layout: Layout<'_>,
         tree: &Tree,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         let tree = tree.state.downcast_ref::<Rc<RefCell<Option<Tree>>>>();
         self.with_element(|element| {

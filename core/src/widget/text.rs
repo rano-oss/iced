@@ -188,7 +188,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        _: Point,
+        _: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{Live, NodeBuilder, Rect, Role},

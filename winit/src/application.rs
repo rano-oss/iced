@@ -587,8 +587,7 @@ async fn run_instance<A, E, C>(
                         A11yId, A11yNode, A11yTree,
                     };
                     // TODO send a11y tree
-                    let child_tree =
-                        user_interface.a11y_nodes(state.cursor_position());
+                    let child_tree = user_interface.a11y_nodes(state.cursor());
                     let mut root = NodeBuilder::new(Role::Window);
                     root.set_name(state.title());
 
@@ -983,7 +982,7 @@ pub fn run_command<A, E>(
                     window.focus_window();
                 }
                 window::Action::ChangeLevel(level) => {
-                    window.set_window_level(conversion::window_level(level));
+                    // window.set_window_level(conversion::window_level(level));
                 }
                 window::Action::FetchId(tag) => {
                     proxy

@@ -270,7 +270,7 @@ where
             self.id.clone(),
             event,
             layout,
-            cursor_position,
+            cursor,
             shell,
             &self.on_press,
             || tree.state.downcast_mut::<State>(),
@@ -343,7 +343,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        p: Point,
+        p: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{
@@ -567,7 +567,10 @@ pub fn draw<'a, Renderer: crate::core::Renderer>(
 where
     Renderer::Theme: StyleSheet,
 {
-    let is_mouse_over = bounds.contains(cursor_position);
+    let is_mouse_over = cursor
+        .position()
+        .map(|p| bounds.contains(p))
+        .unwrap_or(false);
     let state: &State = state();
 
     let styling = if !is_enabled {

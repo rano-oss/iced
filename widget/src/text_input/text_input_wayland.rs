@@ -217,7 +217,7 @@ where
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         value: Option<&Value>,
     ) {
         draw(
@@ -320,8 +320,14 @@ where
             let bounds = limits.max();
             let font = self.font.unwrap_or_else(|| renderer.default_font());
 
-            let (width, height) =
-                renderer.measure(&self.value.to_string(), size, font, bounds);
+            let (width, height) = renderer.measure(
+                &self.value.to_string(),
+                size,
+                text::LineHeight::default(),
+                font,
+                bounds,
+                text::Shaping::Advanced,
+            );
 
             let size = limits.resolve(Size::new(width, height));
             layout::Node::with_children(size, vec![layout::Node::new(size)])
@@ -355,7 +361,7 @@ where
         tree: &mut Tree,
         event: Event,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
@@ -389,7 +395,7 @@ where
         theme: &Renderer::Theme,
         _style: &renderer::Style,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
         draw(
@@ -414,7 +420,7 @@ where
         &self,
         _state: &Tree,
         layout: Layout<'_>,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
@@ -514,6 +520,7 @@ where
             &icon.code_point.to_string(),
             icon.size.unwrap_or_else(|| renderer.default_size()),
             icon.font,
+            text::Shaping::Advanced,
         );
 
         let mut text_node = layout::Node::new(
@@ -559,7 +566,7 @@ where
 pub fn update<'a, Message, Renderer>(
     event: Event,
     layout: Layout<'_>,
-    cursor_position: Point,
+    cursor_position: mouse::Cursor,
     renderer: &Renderer,
     clipboard: &mut dyn Clipboard,
     shell: &mut Shell<'_, Message>,
@@ -593,7 +600,7 @@ where
         | Event::Touch(touch::Event::FingerPressed { .. }) => {
             let state = state();
             let is_clicked =
-                layout.bounds().contains(cursor_position) && on_input.is_some();
+                cursor_position.is_over(layout.bounds()) && on_input.is_some();
 
             state.is_focused = if is_clicked {
                 state.is_focused.or_else(|| {
@@ -610,11 +617,13 @@ where
             let font: <Renderer as text::Renderer>::Font =
                 font.unwrap_or_else(|| renderer.default_font());
             if is_clicked {
+                let Some(pos) = cursor_position.position() else {
+                    return event::Status::Ignored;
+                };
                 let text_layout = layout.children().next().unwrap();
-                let target = cursor_position.x - text_layout.bounds().x;
+                let target = pos.x - text_layout.bounds().x;
 
-                let click =
-                    mouse::Click::new(cursor_position, state.last_click);
+                let click = mouse::Click::new(pos, state.last_click);
 
                 match (
                     &state.dragging_state,
@@ -679,7 +688,7 @@ where
                                 height: text_bounds.height,
                             };
 
-                            if selection_bounds.contains(cursor_position) {
+                            if cursor_position.is_over(selection_bounds) {
                                 let text = state
                                     .selected_text(&value.to_string())
                                     .unwrap_or_default();
@@ -1398,7 +1407,7 @@ pub fn draw<Renderer>(
     renderer: &mut Renderer,
     theme: &Renderer::Theme,
     layout: Layout<'_>,
-    cursor_position: Point,
+    cursor_position: mouse::Cursor,
     state: &State,
     value: &Value,
     placeholder: &str,
@@ -1421,7 +1430,7 @@ pub fn draw<Renderer>(
     let mut children_layout = layout.children();
     let text_bounds = children_layout.next().unwrap().bounds();
 
-    let is_mouse_over = bounds.contains(cursor_position);
+    let is_mouse_over = cursor_position.is_over(bounds);
 
     let appearance = if is_disabled {
         theme.disabled(style)
@@ -1454,6 +1463,8 @@ pub fn draw<Renderer>(
             bounds: icon_layout.bounds(),
             horizontal_alignment: alignment::Horizontal::Left,
             vertical_alignment: alignment::Vertical::Top,
+            line_height: text::LineHeight::default(),
+            shaping: text::Shaping::Advanced,
         });
     }
 
@@ -1567,6 +1578,7 @@ pub fn draw<Renderer>(
         if text.is_empty() { placeholder } else { &text },
         size,
         font,
+        text::Shaping::Advanced,
     );
 
     let render = |renderer: &mut Renderer| {
@@ -1594,6 +1606,8 @@ pub fn draw<Renderer>(
             size,
             horizontal_alignment: alignment::Horizontal::Left,
             vertical_alignment: alignment::Vertical::Center,
+            line_height: text::LineHeight::default(),
+            shaping: text::Shaping::Advanced,
         });
     };
 
@@ -1609,10 +1623,10 @@ pub fn draw<Renderer>(
 /// Computes the current [`mouse::Interaction`] of the [`TextInput`].
 pub fn mouse_interaction(
     layout: Layout<'_>,
-    cursor_position: Point,
+    cursor_position: mouse::Cursor,
     is_disabled: bool,
 ) -> mouse::Interaction {
-    if layout.bounds().contains(cursor_position) {
+    if cursor_position.is_over(layout.bounds()) {
         if is_disabled {
             mouse::Interaction::NotAllowed
         } else {
@@ -1850,8 +1864,12 @@ where
 {
     let text_before_cursor = value.until(cursor_index).to_string();
 
-    let text_value_width =
-        renderer.measure_width(&text_before_cursor, size, font);
+    let text_value_width = renderer.measure_width(
+        &text_before_cursor,
+        size,
+        font,
+        text::Shaping::Advanced,
+    );
 
     let offset = ((text_value_width + 5.0) - text_bounds.width).max(0.0);
 
@@ -1881,8 +1899,10 @@ where
         .hit_test(
             &value,
             size,
+            text::LineHeight::default(),
             font,
             Size::INFINITY,
+            text::Shaping::Advanced,
             Point::new(x + offset, text_bounds.height / 2.0),
             true,
         )

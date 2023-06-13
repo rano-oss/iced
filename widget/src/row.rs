@@ -238,7 +238,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        p: Point,
+        p: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::A11yTree;
         A11yTree::join(

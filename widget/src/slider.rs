@@ -16,6 +16,7 @@ use crate::core::{
 use std::borrow::Cow;
 use std::ops::RangeInclusive;
 
+use iced_renderer::core::BorderRadius;
 pub use iced_style::slider::{
     Appearance, Handle, HandleShape, Rail, StyleSheet,
 };
@@ -291,7 +292,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},
@@ -299,7 +300,7 @@ where
         };
 
         let bounds = layout.bounds();
-        let is_hovered = bounds.contains(cursor_position);
+        let is_hovered = cursor_position.is_over(bounds);
         let Rectangle {
             x,
             y,
@@ -509,7 +510,7 @@ pub fn draw<T, R>(
                     .max(2.0 * border_width)
                     .min(bounds.height / 2.0)
                     .min(bounds.width / 2.0);
-                (radius * 2.0, radius * 2.0, radius)
+                (radius * 2.0, radius * 2.0, BorderRadius::from(radius))
             }
             HandleShape::Rectangle {
                 width,
@@ -519,9 +520,11 @@ pub fn draw<T, R>(
                     .max(2.0 * border_width)
                     .min(bounds.width);
                 let height = bounds.height;
-                let border_radius =
-                    border_radius.min(height / 2.0).min(width / 2.0).max(0.0);
-                (width, height, border_radius)
+                let mut border_radius: [f32; 4] = border_radius.into();
+                for r in &mut border_radius {
+                    *r = (*r).min(height / 2.0).min(width / 2.0).max(0.0);
+                }
+                (width, height, border_radius.into())
             }
         };
 

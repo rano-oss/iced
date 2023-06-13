@@ -576,7 +576,7 @@ where
     #[cfg(feature = "a11y")]
     pub fn a11y_nodes(
         &self,
-        cursor_position: Point,
+        cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         self.root.as_widget().a11y_nodes(
             Layout::new(&self.base),

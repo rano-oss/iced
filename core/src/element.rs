@@ -1,11 +1,11 @@
 use crate::event::{self, Event};
 use crate::id::Id;
-use crate::layout;
 use crate::mouse;
 use crate::overlay;
 use crate::renderer;
 use crate::widget;
 use crate::widget::tree::{self, Tree};
+use crate::{layout, Point};
 use crate::{Clipboard, Color, Layout, Length, Rectangle, Shell, Widget};
 
 use std::any::Any;
@@ -305,7 +305,7 @@ where
         _theme: &<Renderer as crate::Renderer>::Theme,
         _style: &renderer::Style,
         _layout: Layout<'_>,
-        _cursor_position: Point,
+        _cursor_position: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
         todo!()
@@ -505,7 +505,7 @@ where
         &self,
         _layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: Point,
+        _cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         self.widget.a11y_nodes(_layout, _state, _cursor_position)
     }

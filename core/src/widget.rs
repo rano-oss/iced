@@ -147,7 +147,7 @@ where
         &self,
         _layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: Point,
+        _cursor_position: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         iced_accessibility::A11yTree::default()
     }
