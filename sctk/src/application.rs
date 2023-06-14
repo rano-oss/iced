@@ -446,6 +446,7 @@ where
                     SctkEvent::WindowEvent { variant, id } => match variant {
                         crate::sctk_event::WindowEventVariant::Created(id, native_id) => {
                             surface_ids.insert(id, SurfaceIdWrapper::Window(native_id));
+                            states.insert(native_id, State::new(&application, SurfaceIdWrapper::Window(native_id)));
                         }
                         crate::sctk_event::WindowEventVariant::Close => {
                             if let Some(surface_id) = surface_ids.remove(&id.id()) {
@@ -485,8 +486,9 @@ where
                                      wrapper
                                  });
                                 if first {
-                                    let state = State::new(&application, *id);
-
+                                    let Some(state) = states.get(&id.inner()) else {
+                                        continue;
+                                    };
                                     let user_interface = build_user_interface(
                                         &application,
                                         user_interface::Cache::default(),
@@ -498,7 +500,6 @@ where
                                         &mut auto_size_surfaces,
                                         &mut ev_proxy
                                     );
-                                    states.insert(id.inner(), state);
                                     interfaces.insert(id.inner(), user_interface);
                                 }
                                 if let Some(state) = states.get_mut(&id.inner()) {
@@ -518,6 +519,8 @@ where
                     SctkEvent::LayerSurfaceEvent { variant, id } => match variant {
                         LayerSurfaceEventVariant::Created(id, native_id) => {
                             surface_ids.insert(id, SurfaceIdWrapper::LayerSurface(native_id));
+                            states.insert(native_id, State::new(&application, SurfaceIdWrapper::LayerSurface(native_id)));
+
                         }
                         LayerSurfaceEventVariant::Done => {
                             if let Some(surface_id) = surface_ids.remove(&id.id()) {
@@ -552,8 +555,9 @@ where
                                      wrapper
                                 });
                                 if first {
-                                    let state = State::new(&application, *id);
-
+                                    let Some(state) = states.get(&id.inner()) else {
+                                        continue;
+                                    };
                                     let user_interface = build_user_interface(
                                         &application,
                                         user_interface::Cache::default(),
@@ -565,7 +569,6 @@ where
                                         &mut auto_size_surfaces,
                                         &mut ev_proxy
                                     );
-                                    states.insert(id.inner(), state);
                                     interfaces.insert(id.inner(), user_interface);
                                 }
                                 if let Some(state) = states.get_mut(&id.inner()) {
@@ -593,6 +596,8 @@ where
                     } => match variant {
                         PopupEventVariant::Created(id, native_id) => {
                             surface_ids.insert(id, SurfaceIdWrapper::Popup(native_id));
+                            states.insert(native_id, State::new(&application, SurfaceIdWrapper::Popup(native_id)));
+
                         }
                         PopupEventVariant::Done => {
                             if let Some(surface_id) = surface_ids.remove(&id.id()) {
@@ -618,8 +623,9 @@ where
                                      wrapper
                                 });
                                 if first {
-                                    let state = State::new(&application, *id);
-
+                                    let Some(state) = states.get(&id.inner()) else {
+                                        continue;
+                                    };
                                     let user_interface = build_user_interface(
                                         &application,
                                         user_interface::Cache::default(),
@@ -631,7 +637,6 @@ where
                                         &mut auto_size_surfaces,
                                         &mut ev_proxy
                                     );
-                                    states.insert(id.inner(), state);
                                     interfaces.insert(id.inner(), user_interface);
                                 }
                                 if let Some(state) = states.get_mut(&id.inner()) {
@@ -930,9 +935,10 @@ where
                             has_events || !native_events.is_empty();
 
                         let (interface_state, statuses) = {
-                            let user_interface = interfaces
-                                .get_mut(&surface_id.inner())
-                                .unwrap();
+                            let Some(user_interface) = interfaces
+                                .get_mut(&surface_id.inner()) else {
+                                    continue;
+                                };
                             user_interface.update(
                                 native_events.as_slice(),
                                 cursor_position,

@@ -1,4 +1,5 @@
 use crate::{
+    dpi::LogicalSize,
     event_loop::state::SctkState,
     sctk_event::{SctkEvent, WindowEventVariant},
 };
@@ -67,18 +68,15 @@ impl<T: Debug> WindowHandler for SctkState<T> {
                     .unwrap_or_else(|| NonZeroU32::new(500).unwrap()),
             );
         }
-        window.current_size = configure
+        configure
             .new_size
             .0
             .zip(configure.new_size.1)
             .map(|new_size| {
-                window.window.set_window_geometry(
-                    0,
-                    0,
-                    new_size.0.get(),
-                    new_size.1.get(),
-                );
-                new_size
+                window.update_size(LogicalSize {
+                    width: new_size.0,
+                    height: new_size.1,
+                });
             });
 
         let wl_surface = window.window.wl_surface();
