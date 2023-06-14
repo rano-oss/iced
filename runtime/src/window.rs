@@ -19,12 +19,9 @@ use crate::futures::subscription::{self, Subscription};
 /// animations without missing any frames.
 pub fn frames() -> Subscription<(Id, Instant)> {
     subscription::raw_events(|event, _status| match event {
-        iced_core::Event::Window(id, Event::RedrawRequested(at))
-        | iced_core::Event::PlatformSpecific(
-            iced_core::event::PlatformSpecific::Wayland(
-                iced_core::event::wayland::Event::Frame(at, _, id),
-            ),
-        ) => Some((id, at)),
+        iced_core::Event::Window(id, Event::RedrawRequested(at)) => {
+            Some((id, at))
+        }
         _ => None,
     })
 }
