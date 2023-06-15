@@ -210,8 +210,7 @@ impl Application for Todos {
                             widget::focus_next()
                         }
                     }
-                    Message::CloseRequested(s) => {
-                        dbg!(s);
+                    Message::CloseRequested(_) => {
                         std::process::exit(0);
                     }
                     Message::TextInputDragged(text_input_state) => {
