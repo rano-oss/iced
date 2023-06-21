@@ -14,7 +14,7 @@ use crate::{
     },
     settings,
 };
-use float_cmp::approx_eq;
+use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
 #[cfg(feature = "a11y")]
 use iced_accessibility::{
@@ -47,6 +47,7 @@ use sctk::{
 };
 use std::{collections::HashMap, ffi::c_void, hash::Hash, marker::PhantomData};
 use wayland_backend::client::ObjectId;
+use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 
 use iced_graphics::{
     compositor,
@@ -498,21 +499,21 @@ where
                         ) => {
                             if let Some(id) = surface_ids.get(&id.id()) {
                                 compositor_surfaces.entry(id.inner()).or_insert_with(|| {
-                                     let mut wrapper = SurfaceDisplayWrapper {
-                                         comp_surface: None,
-                                         backend: backend.clone(),
-                                         wl_surface
-                                     };
-                                     if matches!(simple_clipboard.state,  crate::clipboard::State::Unavailable) {
-                                        if let RawDisplayHandle::Wayland(handle) = wrapper.raw_display_handle() {
-                                            assert!(!handle.display.is_null());
-                                            simple_clipboard = unsafe { Clipboard::connect(handle.display as *mut c_void) };
-                                        }
-                                     }
-                                     let c_surface = compositor.create_surface(&wrapper, configure.new_size.0.unwrap().get(), configure.new_size.1.unwrap().get());
-                                     wrapper.comp_surface.replace(c_surface);
-                                     wrapper
-                                 });
+                                    let mut wrapper = SurfaceDisplayWrapper {
+                                        comp_surface: None,
+                                        backend: backend.clone(),
+                                        wl_surface
+                                    };
+                                    if matches!(simple_clipboard.state,  crate::clipboard::State::Unavailable) {
+                                    if let RawDisplayHandle::Wayland(handle) = wrapper.raw_display_handle() {
+                                        assert!(!handle.display.is_null());
+                                        simple_clipboard = unsafe { Clipboard::connect(handle.display as *mut c_void) };
+                                    }
+                                    }
+                                    let c_surface = compositor.create_surface(&wrapper, configure.new_size.0.unwrap().get(), configure.new_size.1.unwrap().get());
+                                    wrapper.comp_surface.replace(c_surface);
+                                    wrapper
+                                });
                                 if first {
                                     let Some(state) = states.get(&id.inner()) else {
                                         continue;
@@ -535,11 +536,12 @@ where
                                 }
                             }
                         }
-                        crate::sctk_event::WindowEventVariant::ScaleFactorChanged(sf) => {
+                        crate::sctk_event::WindowEventVariant::ScaleFactorChanged(sf, viewport) => {
                             if let Some(state) = surface_ids
                                 .get(&id.id())
                                 .and_then(|id| states.get_mut(&id.inner()))
                             {
+                                state.wp_viewport = viewport;
                                 state.set_scale_factor(sf);
                             }
                         },
@@ -552,6 +554,9 @@ where
                         }
                         LayerSurfaceEventVariant::Done => {
                             if let Some(surface_id) = surface_ids.remove(&id.id()) {
+                                if kbd_surface_id == Some(id.id()) {
+                                    kbd_surface_id = None;
+                                }
                                 drop(compositor_surfaces.remove(&surface_id.inner()));
                                 auto_size_surfaces.remove(&surface_id);
                                 interfaces.remove(&surface_id.inner());
@@ -608,11 +613,12 @@ where
                                 }
                             }
                         }
-                        LayerSurfaceEventVariant::ScaleFactorChanged(sf) => {
+                        LayerSurfaceEventVariant::ScaleFactorChanged(sf, viewport) => {
                             if let Some(state) = surface_ids
                                 .get(&id.id())
                                 .and_then(|id| states.get_mut(&id.inner()))
                             {
+                                state.wp_viewport = viewport;
                                 state.set_scale_factor(sf);
                             }
                         },
@@ -688,9 +694,10 @@ where
                                 }
                             }
                         },
-                        PopupEventVariant::ScaleFactorChanged(sf) => {
+                        PopupEventVariant::ScaleFactorChanged(sf, viewport) => {
                             if let Some(id) = surface_ids.get(&id.id()) {
                                 if let Some(state) = states.get_mut(&id.inner()) {
+                                    state.wp_viewport = viewport;
                                     state.set_scale_factor(sf);
                                 }
                             }
@@ -768,8 +775,8 @@ where
                     Widget::layout(e.as_widget(), &renderer, &Limits::NONE);
                 let bounds = node.bounds();
                 let (w, h) = (
-                    (bounds.width.ceil() + 0.1) as u32,
-                    (bounds.height.ceil() + 0.1) as u32,
+                    (bounds.width.round()) as u32,
+                    (bounds.height.round()) as u32,
                 );
                 if w == 0 || h == 0 {
                     error!("Dnd surface has zero size, ignoring");
@@ -991,36 +998,6 @@ where
                         {
                             if dirty {
                                 state.set_logical_size(w as f64, h as f64);
-                                match surface_id {
-                                    SurfaceIdWrapper::Window(id) => {
-                                        ev_proxy.send_event(Event::Window(
-                                            platform_specific::wayland::window::Action::Size {
-                                                id: *id,
-                                                width: w,
-                                                height: h,
-                                            },
-                                        ));
-                                    }
-                                    SurfaceIdWrapper::LayerSurface(id) => {
-                                        ev_proxy.send_event(Event::LayerSurface(
-                                            platform_specific::wayland::layer_surface::Action::Size {
-                                                id: *id,
-                                                width: Some(w),
-                                                height: Some(h),
-                                            },
-                                        ));
-                                    }
-                                    SurfaceIdWrapper::Popup(id) => {
-                                        ev_proxy.send_event(Event::Popup(
-                                            platform_specific::wayland::popup::Action::Size {
-                                                id: *id,
-                                                width: w,
-                                                height: h,
-                                            },
-                                        ));
-                                    }
-                                    _ => {}
-                                };
                             }
                             auto_size_surfaces
                                 .insert(*surface_id, (w, h, limits, false));
@@ -1033,14 +1010,22 @@ where
                             || matches!(
                                 interface_state,
                                 user_interface::State::Outdated
-                            ) || state.first()
+                            )
+                            || state.first()
+                            || state.viewport_changed
                         {
-                            state.set_needs_redraw(state.frame.is_some() || state.first());
+                            state.set_needs_redraw(
+                                state.frame.is_some()
+                                    || state.first()
+                                    || state.viewport_changed,
+                            );
                             needs_update = !messages.is_empty()
                                 || matches!(
                                     interface_state,
                                     user_interface::State::Outdated
-                                ) || state.first();
+                                )
+                                || state.first()
+                                || state.needs_redraw();
                             state.set_first(false);
                         }
                     }
@@ -1333,7 +1318,9 @@ where
             IcedSctkEvent::RedrawEventsCleared => {
                 // TODO
             }
-            IcedSctkEvent::LoopDestroyed => todo!(),
+            IcedSctkEvent::LoopDestroyed => {
+                panic!("Loop destroyed");
+            }
             #[cfg(feature = "a11y")]
             IcedSctkEvent::A11yEvent(ActionRequestEvent {
                 surface_id,
@@ -1450,7 +1437,7 @@ where
     let mut view = application.view(id.inner());
     debug.view_finished();
 
-    let size = if let Some((prev_w, prev_h, limits, dirty)) =
+    let size = if let Some((w, h, limits, dirty)) =
         auto_size_surfaces.remove(&id)
     {
         let view: &mut dyn Widget<
@@ -1461,12 +1448,14 @@ where
         let _state = Widget::state(view);
         view.diff(&mut Tree::empty());
         let bounds = view.layout(renderer, &limits).bounds().size();
-        // XXX add a small number to make sure it doesn't get truncated...
+
         let (w, h) = (
-            (bounds.width.ceil() + 0.1) as u32,
-            (bounds.height.ceil() + 0.1) as u32,
+            (bounds.width.round()) as u32,
+            (bounds.height.round()) as u32,
         );
-        let dirty = dirty || w != prev_w || h != prev_h;
+        let dirty = dirty
+            || w != size.width.round() as u32
+            || h != size.height.round() as u32;
         auto_size_surfaces.insert(id, (w, h, limits, dirty));
         if dirty {
             match id {
@@ -1527,6 +1516,7 @@ where
     frame: Option<WlSurface>,
     needs_redraw: bool,
     first: bool,
+    wp_viewport: Option<WpViewport>,
 }
 
 impl<A: Application> State<A>
@@ -1557,6 +1547,7 @@ where
             frame: None,
             needs_redraw: false,
             first: true,
+            wp_viewport: None,
         }
     }
 
@@ -1612,8 +1603,8 @@ where
     /// Sets the logical [`Size`] of the [`Viewport`] of the [`State`].
     pub fn set_logical_size(&mut self, w: f64, h: f64) {
         let old_size = self.viewport.logical_size();
-        if !approx_eq!(f32, w as f32, old_size.width, ulps = 2)
-            || !approx_eq!(f32, h as f32, old_size.height, ulps = 2)
+        if !approx_eq!(f32, w as f32, old_size.width, F32Margin::default())
+            || !approx_eq!(f32, h as f32, old_size.height, F32Margin::default())
         {
             let logical_size = LogicalSize::<f64>::new(w, h);
             let physical_size: PhysicalSize<u32> =
@@ -1626,6 +1617,12 @@ where
                 },
                 self.scale_factor(),
             );
+            if let Some(wp_viewport) = self.wp_viewport.as_ref() {
+                wp_viewport.set_destination(
+                    logical_size.width.round() as i32,
+                    logical_size.height.round() as i32,
+                );
+            }
         }
     }
 
@@ -1635,22 +1632,35 @@ where
     }
 
     pub fn set_scale_factor(&mut self, scale_factor: f64) {
-        if !approx_eq!(f64, scale_factor, self.surface_scale_factor, ulps = 2) {
+        if !approx_eq!(
+            f64,
+            scale_factor,
+            self.surface_scale_factor,
+            F64Margin::default()
+        ) {
             self.viewport_changed = true;
             let logical_size = self.viewport.logical_size();
             let logical_size = LogicalSize::<f64>::new(
                 logical_size.width as f64,
                 logical_size.height as f64,
             );
-            let physical_size: PhysicalSize<u32> = logical_size
-                .to_physical(self.application_scale_factor * scale_factor);
+            self.surface_scale_factor = scale_factor;
+            let physical_size: PhysicalSize<u32> = logical_size.to_physical(
+                self.application_scale_factor * self.surface_scale_factor,
+            );
             self.viewport = Viewport::with_physical_size(
                 Size {
                     width: physical_size.width,
                     height: physical_size.height,
                 },
-                self.application_scale_factor * scale_factor,
+                self.application_scale_factor * self.surface_scale_factor,
             );
+            if let Some(wp_viewport) = self.wp_viewport.as_ref() {
+                wp_viewport.set_destination(
+                    logical_size.width.round() as i32,
+                    logical_size.height.round() as i32,
+                );
+            }
         }
     }
 
@@ -1882,7 +1892,7 @@ fn run_command<A, E>(
                         e.as_widget_mut().diff(&mut Tree::empty());
                         let node = Widget::layout(e.as_widget(), renderer, &builder.size_limits);
                         let bounds = node.bounds();
-                        let (w, h) = ((bounds.width.ceil() + 0.1) as u32, (bounds.height.ceil() + 0.1) as u32);
+                        let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::LayerSurface(builder.id), (w, h, builder.size_limits, false));
                         builder.size = Some((Some(bounds.width as u32), Some(bounds.height as u32)));
                     }
@@ -1903,7 +1913,7 @@ fn run_command<A, E>(
                         e.as_widget_mut().diff(&mut Tree::empty());
                         let node = Widget::layout(e.as_widget(), renderer, &builder.size_limits);
                         let bounds = node.bounds();
-                        let (w, h) = ((bounds.width.ceil() + 0.1) as u32, (bounds.height.ceil() + 0.1) as u32);
+                        let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::Window(builder.window_id), (w, h, builder.size_limits, false));
                         builder.size = (bounds.width as u32, bounds.height as u32);
                     }
@@ -1924,7 +1934,7 @@ fn run_command<A, E>(
                         e.as_widget_mut().diff(&mut Tree::empty());
                         let node = Widget::layout(e.as_widget(), renderer, &popup.positioner.size_limits);
                         let bounds = node.bounds();
-                        let (w, h) = ((bounds.width.ceil() + 0.1) as u32, (bounds.height.ceil() + 0.1) as u32);
+                        let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::Popup(popup.id), (w, h, popup.positioner.size_limits, false));
                         popup.positioner.size = Some((w, h));
                     }
