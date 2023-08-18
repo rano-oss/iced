@@ -4,6 +4,7 @@ mod scene;
 use controls::Controls;
 use scene::Scene;
 
+use iced_wgpu::core::window::Id;
 use iced_wgpu::graphics::Viewport;
 use iced_wgpu::{wgpu, Backend, Renderer, Settings};
 use iced_winit::conversion;
@@ -153,6 +154,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut state = program::State::new(
+        Id(0),
         controls,
         viewport.logical_size(),
         &mut renderer,
@@ -197,6 +199,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !state.is_queue_empty() {
                     // We update iced
                     let _ = state.update(
+                        Id(0),
                         viewport.logical_size(),
                         cursor_position
                             .map(|p| {
@@ -211,6 +214,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &Theme::Dark,
                         &renderer::Style {
                             text_color: Color::WHITE,
+                            scale_factor: viewport.scale_factor(),
                         },
                         &mut clipboard,
                         &mut debug,

@@ -498,6 +498,7 @@ async fn run_instance<A, E, C>(
                     state.theme(),
                     &renderer::Style {
                         text_color: state.text_color(),
+                        scale_factor: state.scale_factor(),
                     },
                     state.cursor(),
                 );
@@ -659,6 +660,7 @@ async fn run_instance<A, E, C>(
                         state.theme(),
                         &renderer::Style {
                             text_color: state.text_color(),
+                            scale_factor: state.scale_factor(),
                         },
                         state.cursor(),
                     );
