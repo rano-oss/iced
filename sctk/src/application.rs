@@ -889,6 +889,7 @@ where
                     &mut renderer,
                     state.theme(),
                     &Style {
+                        icon_color: state.icon_color(),
                         text_color: state.text_color(),
                         scale_factor: state.scale_factor(),
                     },
@@ -1348,6 +1349,7 @@ where
                         &mut renderer,
                         state.theme(),
                         &Style {
+                            icon_color: state.icon_color(),
                             text_color: state.text_color(),
                             scale_factor: state.scale_factor(),
                         },
@@ -1760,6 +1762,11 @@ where
     /// Returns the current background [`Color`] of the [`State`].
     pub fn background_color(&self) -> Color {
         self.appearance.background_color
+    }
+
+    /// Returns the current icon [`Color`] of the [`State`].
+    pub fn icon_color(&self) -> Color {
+        self.appearance.icon_color
     }
 
     /// Returns the current text [`Color`] of the [`State`].

@@ -616,6 +616,7 @@ async fn run_instance<A, E, C>(
                                     state.theme(),
                                     &renderer::Style {
                                         text_color: state.text_color(),
+                                        icon_color: state.icon_color(),
                                         scale_factor: state.scale_factor(),
                                     },
                                     cursor,
@@ -744,6 +745,7 @@ async fn run_instance<A, E, C>(
                                     window.state.theme(),
                                     &renderer::Style {
                                         text_color: window.state.text_color(),
+                                        icon_color: window.state.icon_color(),
                                         scale_factor: window
                                             .state
                                             .scale_factor(),
