@@ -7,6 +7,7 @@ use crate::{
     application::Event,
     dpi::LogicalSize,
     handlers::{
+        virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
@@ -79,6 +80,7 @@ use wayland_protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
     viewporter::client::wp_viewport::WpViewport,
 };
+use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1;
 
 #[derive(Debug)]
 pub(crate) struct SctkSeat {
@@ -93,6 +95,7 @@ pub(crate) struct SctkSeat {
     pub(crate) _modifiers: Modifiers,
     pub(crate) data_device: DataDevice,
     pub(crate) icon: Option<CursorIcon>,
+    pub(crate) virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
 }
 
 #[derive(Debug, Clone)]
@@ -319,6 +322,7 @@ pub struct SctkState<T> {
     pub(crate) session_lock_state: SessionLockState,
     pub(crate) session_lock: Option<SessionLock>,
     pub(crate) token_ctr: u32,
+    pub(crate) virtual_keyboard_manager: Option<VirtualKeyboardManager<T>>,
 }
 
 /// An error that occurred while running an application.

@@ -1663,9 +1663,9 @@ where
         self.frame = frame;
     }
 
-    pub(crate) fn frame(&self) -> Option<&WlSurface> {
-        self.frame.as_ref()
-    }
+    // pub(crate) fn frame(&self) -> Option<&WlSurface> {
+    //     self.frame.as_ref()
+    // }
 
     pub(crate) fn first(&self) -> bool {
         self.first

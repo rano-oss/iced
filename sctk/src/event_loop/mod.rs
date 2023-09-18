@@ -12,6 +12,7 @@ use crate::{
     dpi::LogicalSize,
     handlers::{
         activation::IcedRequestData,
+        virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
@@ -164,6 +165,15 @@ where
                 }
             };
 
+        let virtual_keyboard_manager =
+            match VirtualKeyboardManager::new(&globals, &qh) {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    error!("Failed to initialize virtual keyboard: {}", e);
+                    None
+                }
+            };
+
         Ok(Self {
             event_loop,
             wayland_dispatcher,
@@ -209,6 +219,7 @@ where
                 fractional_scaling_manager,
                 viewporter_state,
                 compositor_updates: Default::default(),
+                virtual_keyboard_manager,
             },
             _features: Default::default(),
             event_loop_awakener: ping,

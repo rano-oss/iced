@@ -17,6 +17,7 @@ tracing = "0.1"
 thiserror = "1.0"
 sctk = { package = "smithay-client-toolkit", git = "https://github.com/smithay/client-toolkit", rev = "2e9bf9f" }
 wayland-protocols = { version = "0.31.0", features = [ "staging"]}
+wayland-protocols-misc = { version = "0.1.0", features = ["client"] }
 # sctk = { package = "smithay-client-toolkit", path = "../../fork/client-toolkit/" }
 raw-window-handle = "0.5"
 enum-repr = "0.2"

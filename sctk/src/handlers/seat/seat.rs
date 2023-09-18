@@ -31,7 +31,7 @@ where
         let data_device =
             self.data_device_manager_state.get_data_device(qh, &seat);
         self.seats.push(SctkSeat {
-            seat,
+            seat: seat.clone(),
             kbd: None,
             ptr: None,
             _touch: None,
@@ -42,6 +42,10 @@ where
             last_ptr_press: None,
             last_kbd_press: None,
             icon: None,
+            virtual_keyboard: self
+                .virtual_keyboard_manager
+                .as_ref()
+                .map(|vk| vk.virtual_keyboard(&seat, &qh)),
         });
     }
 
@@ -69,6 +73,10 @@ where
                     last_ptr_press: None,
                     last_kbd_press: None,
                     icon: None,
+                    virtual_keyboard: self
+                        .virtual_keyboard_manager
+                        .as_ref()
+                        .map(|vk| vk.virtual_keyboard(&seat.clone(), &qh)),
                 });
                 self.seats.last_mut().unwrap()
             }
