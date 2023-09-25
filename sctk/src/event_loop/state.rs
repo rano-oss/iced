@@ -7,6 +7,7 @@ use crate::{
     application::Event,
     dpi::LogicalSize,
     handlers::{
+        input_method::InputMethodManager,
         virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
@@ -322,6 +323,7 @@ pub struct SctkState<T> {
     pub(crate) session_lock_state: SessionLockState,
     pub(crate) session_lock: Option<SessionLock>,
     pub(crate) token_ctr: u32,
+    pub(crate) input_method_manager: Option<InputMethodManager<T>>,
     pub(crate) virtual_keyboard_manager: Option<VirtualKeyboardManager<T>>,
 }
 

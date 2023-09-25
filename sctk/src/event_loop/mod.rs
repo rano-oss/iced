@@ -12,6 +12,7 @@ use crate::{
     dpi::LogicalSize,
     handlers::{
         activation::IcedRequestData,
+        input_method::InputMethodManager,
         virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
@@ -164,12 +165,23 @@ where
                     (None, None)
                 }
             };
+        let input_method_manager = match InputMethodManager::new(&globals, &qh)
+        {
+            Ok(m) => Some(m),
+            Err(e) => {
+                error!("Failed to initialize input method manager: {}", e);
+                None
+            }
+        };
 
         let virtual_keyboard_manager =
             match VirtualKeyboardManager::new(&globals, &qh) {
                 Ok(m) => Some(m),
                 Err(e) => {
-                    error!("Failed to initialize virtual keyboard: {}", e);
+                    error!(
+                        "Failed to initialize virtual keyboard manager: {}",
+                        e
+                    );
                     None
                 }
             };
@@ -219,6 +231,7 @@ where
                 fractional_scaling_manager,
                 viewporter_state,
                 compositor_updates: Default::default(),
+                input_method_manager,
                 virtual_keyboard_manager,
             },
             _features: Default::default(),
