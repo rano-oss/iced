@@ -8,7 +8,7 @@ use iced_runtime::core::{
 use sctk::{
     reexports::client::protocol::wl_pointer::AxisSource,
     seat::{
-        keyboard::{Keysym, Modifiers},
+        keyboard::Modifiers,
         pointer::{AxisScroll, CursorIcon, BTN_LEFT, BTN_MIDDLE, BTN_RIGHT},
     },
 };
