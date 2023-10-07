@@ -12,7 +12,7 @@ application = []
 multi_window = []
 a11y = ["iced_accessibility", "iced_runtime/a11y"]
 default = ["calloop", "xkbcommon"]
-calloop = ["dep:calloop"]
+calloop = []
 xkbcommon = ["dep:xkbcommon", "bytemuck", "pkg-config", "xkeysym/bytemuck"]
 
 [dependencies]

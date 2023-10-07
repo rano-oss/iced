@@ -487,6 +487,23 @@ where
                             }
                         }
                     },
+                    SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
+                        KeyboardEventVariant::Press(_)
+                        | KeyboardEventVariant::Release(_)
+                        | KeyboardEventVariant::Repeat(_) => {}
+                        KeyboardEventVariant::Modifiers(mods) => {
+                            //TODO: fix this! If needed?
+                            if let Some(state) = kbd_surface_id
+                                .as_ref()
+                                .and_then(|id| surface_ids.get(id))
+                                .and_then(|id| states.get_mut(&id.inner()))
+                            {
+                                state.modifiers = mods;
+                            }
+                        }
+                        KeyboardEventVariant::Leave(_) => unreachable!(),
+                        KeyboardEventVariant::Enter(_) => unreachable!(),
+                    },
                     SctkEvent::WindowEvent { variant, id } => match variant {
                         crate::sctk_event::WindowEventVariant::Created(id, native_id) => {
                             surface_ids.insert(id, SurfaceIdWrapper::Window(native_id));
@@ -2218,5 +2235,7 @@ fn event_is_for_surface(
             &surface.id() == object_id
         }
         SctkEvent::SessionUnlocked => false,
+        SctkEvent::InputMethodEvent { .. } => false,
+        SctkEvent::InputMethodKeyboardEvent { .. } => false, //TODO: |check popupsurface in the future
     }
 }

@@ -2,11 +2,14 @@ pub mod keyboard;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use sctk::reexports::calloop::LoopHandle;
 use sctk::reexports::client::globals::{BindError, GlobalList};
+use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::Dispatch;
 use sctk::reexports::client::{
     delegate_dispatch, Connection, Proxy, QueueHandle,
 };
+use sctk::seat::keyboard::{KeyEvent, Modifiers};
 use wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_method_v2;
 use wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_popup_surface_v2;
 use wayland_protocols_misc::zwp_input_method_v2::client::{
@@ -20,6 +23,9 @@ use sctk::globals::GlobalData;
 
 use crate::delegate_input_method_keyboard;
 use crate::event_loop::state::SctkState;
+use crate::sctk_event::{
+    InputMethodEventVariant, KeyboardEventVariant, SctkEvent,
+};
 
 use self::keyboard::InputMethodKeyboardHandler;
 
@@ -40,6 +46,31 @@ impl<T: 'static> InputMethodManager<T> {
             _phantom: PhantomData,
         })
     }
+
+    pub fn input_method(
+        &self,
+        seat: &WlSeat,
+        queue_handle: &QueueHandle<SctkState<T>>,
+        loop_handle: LoopHandle<'static, SctkState<T>>,
+    ) -> ZwpInputMethodV2 {
+        let mut data = InputMethod {};
+        let im =
+            self.manager
+                .get_input_method(seat, queue_handle, data.clone());
+        data.grab_keyboard_with_repeat(
+            queue_handle,
+            &im,
+            None,
+            loop_handle,
+            Box::new(move |state, _kbd: &ZwpInputMethodKeyboardGrabV2, e| {
+                state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
+                    variant: KeyboardEventVariant::Repeat(e),
+                })
+            }),
+        )
+        .expect("Input method keyboard grab failed");
+        im
+    }
 }
 
 impl<T: 'static> Dispatch<ZwpInputMethodManagerV2, GlobalData, SctkState<T>>
@@ -57,13 +88,14 @@ impl<T: 'static> Dispatch<ZwpInputMethodManagerV2, GlobalData, SctkState<T>>
     }
 }
 
+#[derive(Clone)]
 pub struct InputMethod {}
 
 impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
     for InputMethodManager<T>
 {
     fn event(
-        _: &mut SctkState<T>,
+        state: &mut SctkState<T>,
         _: &ZwpInputMethodV2,
         event: <ZwpInputMethodV2 as Proxy>::Event,
         _: &InputMethod,
@@ -71,8 +103,18 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
         _: &QueueHandle<SctkState<T>>,
     ) {
         match event {
-            zwp_input_method_v2::Event::Activate => {}
-            zwp_input_method_v2::Event::Deactivate => {}
+            zwp_input_method_v2::Event::Activate => {
+                println!("Activate");
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::Activate,
+                })
+            }
+            zwp_input_method_v2::Event::Deactivate => {
+                println!("DeActivate");
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::Deactivate,
+                })
+            }
             zwp_input_method_v2::Event::SurroundingText {
                 text: _,
                 cursor: _,
@@ -125,36 +167,42 @@ delegate_dispatch!(@<T: 'static> SctkState<T>: [ZwpInputPopupSurfaceV2: InputMet
 impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
     fn press_key(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &ZwpInputMethodKeyboardGrabV2,
-        serial: u32,
-        event: keyboard::KeyEvent,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &ZwpInputMethodKeyboardGrabV2,
+        _serial: u32,
+        event: KeyEvent,
     ) {
-        todo!()
+        self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
+            variant: KeyboardEventVariant::Press(event),
+        });
     }
 
     fn release_key(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &ZwpInputMethodKeyboardGrabV2,
-        serial: u32,
-        event: keyboard::KeyEvent,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &ZwpInputMethodKeyboardGrabV2,
+        _serial: u32,
+        event: KeyEvent,
     ) {
-        todo!()
+        self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
+            variant: KeyboardEventVariant::Release(event),
+        });
     }
 
     fn update_modifiers(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &ZwpInputMethodKeyboardGrabV2,
-        serial: u32,
-        modifiers: keyboard::Modifiers,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &ZwpInputMethodKeyboardGrabV2,
+        _serial: u32,
+        modifiers: Modifiers,
     ) {
-        todo!()
+        self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
+            variant: KeyboardEventVariant::Modifiers(modifiers),
+        });
     }
 }
 
-delegate_input_method_keyboard!(@<T: 'static + Debug> SctkState<T>);
+delegate_input_method_keyboard!(@<T: 'static> SctkState<T>);

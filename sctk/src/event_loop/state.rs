@@ -81,7 +81,10 @@ use wayland_protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
     viewporter::client::wp_viewport::WpViewport,
 };
-use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1;
+use wayland_protocols_misc::{
+    zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2,
+    zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
+};
 
 #[derive(Debug)]
 pub(crate) struct SctkSeat {
@@ -97,6 +100,7 @@ pub(crate) struct SctkSeat {
     pub(crate) data_device: DataDevice,
     pub(crate) icon: Option<CursorIcon>,
     pub(crate) virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
+    pub(crate) input_method: Option<ZwpInputMethodV2>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,8 @@
 //! Allow your users to perform actions by pressing a button.
 //!
 //! A [`Button`] has some local [`State`].
+use std::borrow::Cow;
+
 use iced_runtime::core::widget::Id;
 use iced_runtime::{keyboard, Command};
 #[cfg(feature = "a11y")]

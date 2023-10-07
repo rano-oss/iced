@@ -12,6 +12,8 @@ pub mod layer_surface;
 pub mod popup;
 /// session locks
 pub mod session_lock;
+/// virtual keyboard actions
+pub mod virtual_keyboard;
 /// window actions
 pub mod window;
 
@@ -29,6 +31,8 @@ pub enum Action<T> {
     Activation(activation::Action<T>),
     /// session lock
     SessionLock(session_lock::Action<T>),
+    /// virtual keyboard
+    VirtualKeyboard(virtual_keyboard::Action<T>),
 }
 
 impl<T> Action<T> {
@@ -48,6 +52,7 @@ impl<T> Action<T> {
             Action::DataDevice(a) => Action::DataDevice(a.map(f)),
             Action::Activation(a) => Action::Activation(a.map(f)),
             Action::SessionLock(a) => Action::SessionLock(a.map(f)),
+            Action::VirtualKeyboard(a) => Action::VirtualKeyboard(a.map(f)),
         }
     }
 }
@@ -68,6 +73,9 @@ impl<T> Debug for Action<T> {
             }
             Self::SessionLock(arg0) => {
                 f.debug_tuple("SessionLock").field(arg0).finish()
+            }
+            Self::VirtualKeyboard(arg0) => {
+                f.debug_tuple("VirtualKeyboard").field(arg0).finish()
             }
         }
     }

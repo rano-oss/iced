@@ -8,12 +8,15 @@ use std::{sync::Arc, time::Duration};
 pub use xkeysym::Keysym;
 
 #[cfg(feature = "calloop")]
-use calloop::{
+use sctk::reexports::calloop::{
     timer::{TimeoutAction, Timer},
     LoopHandle, RegistrationToken,
 };
-use sctk::reexports::client::{
-    protocol::wl_keyboard, Connection, Dispatch, Proxy, QueueHandle, WEnum,
+use sctk::{
+    reexports::client::{
+        protocol::wl_keyboard, Connection, Dispatch, Proxy, QueueHandle, WEnum,
+    },
+    seat::keyboard::{KeyEvent, KeyboardError, Modifiers, RepeatInfo, RMLVO},
 };
 
 use xkbcommon::xkb;
@@ -24,15 +27,6 @@ use wayland_protocols_misc::zwp_input_method_v2::client::{
 };
 
 use crate::handlers::input_method::InputMethod;
-
-/// Error when creating a keyboard.
-#[must_use]
-#[derive(Debug, thiserror::Error)]
-pub enum KeyboardError {
-    /// The specified keymap (RMLVO) is not valid.
-    #[error("invalid keymap was specified")]
-    InvalidKeymap,
-}
 
 #[cfg(feature = "calloop")]
 pub(crate) struct RepeatedKey {
@@ -279,98 +273,6 @@ pub trait InputMethodKeyboardHandler: Sized {
         _keymap: Keymap<'_>,
     ) {
     }
-}
-
-/// The rate at which a pressed key is repeated.
-#[derive(Debug, Clone, Copy)]
-pub enum RepeatInfo {
-    /// Keys will be repeated at the specified rate and delay.
-    Repeat {
-        /// The number of repetitions per second that should occur.
-        rate: NonZeroU32,
-
-        /// Delay (in milliseconds) between a key press and the start of repetition.
-        delay: u32,
-    },
-
-    /// Keys should not be repeated.
-    Disable,
-}
-
-/// Data associated with a key press or release event.
-#[derive(Debug, Clone)]
-pub struct KeyEvent {
-    /// Time at which the keypress occurred.
-    pub time: u32,
-
-    /// The raw value of the key.
-    pub raw_code: u32,
-
-    /// The interpreted symbol of the key.
-    ///
-    /// This corresponds to one of the assoiated values on the [`Keysym`] type.
-    pub keysym: Keysym,
-
-    /// UTF-8 interpretation of the entered text.
-    ///
-    /// This will always be [`None`] on release events.
-    pub utf8: Option<String>,
-}
-
-/// The state of keyboard modifiers
-///
-/// Each field of this indicates whether a specified modifier is active.
-///
-/// Depending on the modifier, the modifier key may currently be pressed or toggled.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Modifiers {
-    /// The "control" key
-    pub ctrl: bool,
-
-    /// The "alt" key
-    pub alt: bool,
-
-    /// The "shift" key
-    pub shift: bool,
-
-    /// The "Caps lock" key
-    pub caps_lock: bool,
-
-    /// The "logo" key
-    ///
-    /// Also known as the "windows" or "super" key on a keyboard.
-    #[doc(alias = "windows")]
-    #[doc(alias = "super")]
-    pub logo: bool,
-
-    /// The "Num lock" key
-    pub num_lock: bool,
-}
-
-/// The RMLVO description of a keymap
-///
-/// All fields are optional, and the system default
-/// will be used if set to `None`.
-#[derive(Debug)]
-#[allow(clippy::upper_case_acronyms)]
-pub struct RMLVO {
-    /// The rules file to use
-    pub rules: Option<String>,
-
-    /// The keyboard model by which to interpret keycodes and LEDs
-    pub model: Option<String>,
-
-    /// A comma separated list of layouts (languages) to include in the keymap
-    pub layout: Option<String>,
-
-    /// A comma separated list of variants, one per layout, which may modify or
-    /// augment the respective layout in various ways
-    pub variant: Option<String>,
-
-    /// A comma separated list of options, through which the user specifies
-    /// non-layout related preferences, like which key combinations are
-    /// used for switching layouts, or which key is the Compose key.
-    pub options: Option<String>,
 }
 
 pub struct InputMethodKeyboardData<T> {
@@ -674,7 +576,7 @@ where
                         let event = KeyEvent {
                             time,
                             raw_code: key,
-                            keysym: Keysym::new(keysym.into()),
+                            keysym: keysym.into(),
                             utf8,
                         };
 
@@ -845,7 +747,7 @@ where
 
                             match compose.as_mut() {
                                 Some(compose) => match compose
-                                    .feed(event.key.keysym)
+                                    .feed(event.key.keysym.into())
                                 {
                                     xkb::FeedResult::Ignored => None,
                                     xkb::FeedResult::Accepted => match compose
