@@ -1,7 +1,7 @@
 use std::{fmt, marker::PhantomData};
 
+use iced_core::event::wayland::KeyEvent;
 use iced_futures::MaybeSend;
-use sctk::seat::keyboard::KeyEvent;
 
 /// Virtual keyboard action
 pub struct Action<T> {
@@ -29,10 +29,7 @@ impl<T> fmt::Debug for Action<T> {
 /// Virtual keyboard Actions
 pub enum ActionInner {
     /// create a window and receive a message with its Id
-    KeyPressed {
-        /// popup
-        key_event: KeyEvent,
-    },
+    KeyPressed(KeyEvent),
 }
 
 impl<T> Action<T> {
@@ -51,8 +48,8 @@ impl<T> Action<T> {
 impl fmt::Debug for ActionInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::KeyPressed { key_event } => {
-                f.debug_tuple("Key event").field(key_event).finish()
+            Self::KeyPressed(key) => {
+                f.debug_tuple("Key event").field(key).finish()
             }
         }
     }

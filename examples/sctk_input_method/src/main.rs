@@ -1,8 +1,10 @@
 use iced::{
-    event::{self, wayland::InputMethodEvent},
-    keyboard::{KeyCode, Modifiers},
+    event::{
+        self,
+        wayland::{InputMethodEvent, InputMethodKeyboardEvent, KeyEvent},
+    },
     subscription,
-    wayland::{virtual_keyboard::virtual_keyboard_key_press, InitialSurface},
+    wayland::{virtual_keyboard::virtual_keyboard_key_press, InitialSurface, actions::window::SctkWindowSettings},
     widget::container,
     window, Application, Color, Command, Element, Event, Subscription, Theme,
 };
@@ -22,10 +24,7 @@ pub struct InputMethod {}
 pub enum Message {
     Activate,
     Deactivate,
-    KeyPressed {
-        key_code: KeyCode,
-        modifiers: Modifiers,
-    },
+    KeyPressed(KeyEvent),
 }
 
 impl Debug for Message {
@@ -33,10 +32,7 @@ impl Debug for Message {
         match self {
             Message::Activate => write!(f, "Message::Activate"),
             Message::Deactivate => write!(f, "Message::Deactivate"),
-            Message::KeyPressed {
-                key_code,
-                modifiers,
-            } => todo!(),
+            Message::KeyPressed(_key) => write!(f, "Message::KeyPressed"),
         }
     }
 }
@@ -47,7 +43,7 @@ impl Application for InputMethod {
     type Flags = ();
     type Theme = Theme;
 
-    fn new(_flags: Self::Flags) -> (InputMethod, Command<Self::Message>) {
+    fn new(_flags: ()) -> (InputMethod, Command<Message>) {
         (InputMethod {}, Command::none())
     }
 
@@ -55,84 +51,80 @@ impl Application for InputMethod {
         String::from("InputMethod")
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            Message::Activate => {}
-            Message::Deactivate => {}
-            Message::KeyPressed {
-                key_code,
-                modifiers,
-            } => {
-                virtual_keyboard_key_press(key_code.into());
-            }
-        };
-        Command::none()
+            Message::Activate => Command::none(),
+            Message::Deactivate => Command::none(),
+            Message::KeyPressed(key) => virtual_keyboard_key_press(key),
+        }
     }
 
-    fn view(&self, id: window::Id) -> Element<Self::Message> {
+    fn view(&self, _id: window::Id) -> Element<Message> {
         unimplemented!();
     }
 
     fn subscription(&self) -> Subscription<Message> {
         subscription::events_with(|event, status| match (event, status) {
+            // (
+            //     Event::PlatformSpecific(event::PlatformSpecific::Wayland(
+            //         event::wayland::Event::InputMethod(
+            //             InputMethodEvent::Activate,
+            //         ),
+            //     )),
+            //     _,
+            // ) => Some(Message::Activate),
             (
                 Event::PlatformSpecific(event::PlatformSpecific::Wayland(
-                    event::wayland::Event::InputMethod(
-                        InputMethodEvent::Activate,
+                    event::wayland::Event::InputMethodKeyboard(
+                        InputMethodKeyboardEvent::Press(key),
                     ),
                 )),
                 _,
-            ) => Some(Message::Activate),
-            (
-                Event::Keyboard(Event::KeyPressed {
-                    key_code,
-                    modifiers,
-                    ..
-                }),
-                _,
-            ) => Some(Message::KeyPressed {
-                key_code,
-                modifiers,
-            }),
+            ) => {
+                dbg!(&key);
+                Some(Message::KeyPressed(key))
+            }
+            // (Event::Keyboard(_), event::Status::Ignored) => todo!(),
+            // (Event::Keyboard(_), event::Status::Captured) => None,
+            // (Event::Mouse(_), event::Status::Ignored) => None,
+            // (Event::Mouse(_), event::Status::Captured) => None,
+            // (Event::Window(_, _), event::Status::Ignored) => None,
+            // (Event::Window(_, _), event::Status::Captured) => None,
+            // (Event::Touch(_), event::Status::Ignored) => None,
+            // (Event::Touch(_), event::Status::Captured) => None,
+            // // (Event::A11y(_, _), event::Status::Ignored) => None,
+            // // (Event::A11y(_, _), event::Status::Captured) => None,
+            // (Event::PlatformSpecific(ps), _) => match ps {
+            //     event::PlatformSpecific::Wayland(event) => match event {
+            //         event::wayland::Event::Layer(_, _, _) => None,
+            //         event::wayland::Event::Popup(_, _, _) => None,
+            //         event::wayland::Event::Output(_, _) => None,
+            //         event::wayland::Event::Window(_, _, _) => None,
+            //         event::wayland::Event::Seat(_, _) => None,
+            //         event::wayland::Event::DataSource(_) => None,
+            //         event::wayland::Event::DndOffer(_) => None,
+            //         event::wayland::Event::SelectionOffer(_) => None,
+            //         event::wayland::Event::Frame(_, _, _) => None,
+            //         event::wayland::Event::InputMethod(_) => None,
+            //         event::wayland::Event::InputMethodKeyboard(ke) => {
+            //             match ke {
+            //                 InputMethodKeyboardEvent::Press(ke) => {
+            //                     Some(Message::KeyPressed(ke))
+            //                 }
+            //                 InputMethodKeyboardEvent::Release(_) => None,
+            //                 InputMethodKeyboardEvent::Repeat(_) => None,
+            //                 InputMethodKeyboardEvent::Modifiers(_) => None,
+            //             }
+            //         }
+            //     },
+            //     event::PlatformSpecific::MacOS(_) => None,
             _ => None,
+            // },
+            // (Event::PlatformSpecific(ps), event::Status::Captured) => None,
         })
     }
 
-    fn close_requested(&self, id: window::Id) -> Self::Message {
+    fn close_requested(&self, _id: window::Id) -> Message {
         unimplemented!()
-    }
-
-    fn style(&self) -> <Self::Theme as application::StyleSheet>::Style {
-        <Self::Theme as application::StyleSheet>::Style::Custom(Box::new(
-            CustomTheme,
-        ))
-    }
-}
-
-pub struct CustomTheme;
-
-impl container::StyleSheet for CustomTheme {
-    type Style = iced::Theme;
-
-    fn appearance(&self, style: &Self::Style) -> container::Appearance {
-        container::Appearance {
-            border_color: Color::from_rgb(1.0, 0.0, 0.0),
-            border_radius: 2.0.into(),
-            border_width: 2.0,
-            background: Some(Color::from_rgb(1.0, 0.0, 0.0).into()),
-            ..container::Appearance::default()
-        }
-    }
-}
-
-impl iced_style::application::StyleSheet for CustomTheme {
-    type Style = iced::Theme;
-
-    fn appearance(&self, style: &Self::Style) -> application::Appearance {
-        iced_style::application::Appearance {
-            background_color: Color::from_rgba(1.0, 0.0, 1.0, 1.0),
-            text_color: Color::from_rgb(0.0, 1.0, 0.0),
-            icon_color: Color::from_rgb(0.0, 0.0, 1.0),
-        }
     }
 }

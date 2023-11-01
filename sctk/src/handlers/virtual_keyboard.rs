@@ -1,13 +1,11 @@
 use std::{fmt::Debug, marker::PhantomData, sync::Mutex};
 
-use sctk::{
-    reexports::client::{
-        delegate_dispatch,
-        globals::{BindError, GlobalList},
-        protocol::{wl_keyboard, wl_seat::WlSeat},
-        Connection, Dispatch, Proxy, QueueHandle,
-    },
-    seat::keyboard::KeyEvent,
+use iced_futures::core::event::wayland::KeyEvent;
+use sctk::reexports::client::{
+    delegate_dispatch,
+    globals::{BindError, GlobalList},
+    protocol::{wl_keyboard, wl_seat::WlSeat},
+    Connection, Dispatch, Proxy, QueueHandle,
 };
 
 use sctk::seat::keyboard::Modifiers;

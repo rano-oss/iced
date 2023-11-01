@@ -147,7 +147,7 @@ pub enum SctkEvent {
         // input_method_id: ZwpInputMethodV2,
     },
     InputMethodKeyboardEvent {
-        variant: KeyboardEventVariant,
+        variant: InputMethodKeyboardEventVariant,
     },
     // TODO data device & touch
 
@@ -295,6 +295,14 @@ pub enum KeyboardEventVariant {
 pub enum InputMethodEventVariant {
     Activate,
     Deactivate,
+}
+
+#[derive(Debug, Clone)]
+pub enum InputMethodKeyboardEventVariant {
+    Press(KeyEvent),
+    Repeat(KeyEvent),
+    Release(KeyEvent),
+    Modifiers(Modifiers),
 }
 
 #[derive(Debug, Clone)]
@@ -471,6 +479,7 @@ impl SctkEvent {
                 .into_iter()
                 .collect(), // TODO Ashley: conversion
             },
+            // TODO: Not really handled here anyway
             SctkEvent::InputMethodEvent {
                 variant,
                 // input_method_id,
@@ -490,93 +499,48 @@ impl SctkEvent {
                     )]
                 }
             },
-            SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
-                KeyboardEventVariant::Enter(_) => unimplemented!(),
-                KeyboardEventVariant::Leave(_) => unimplemented!(),
-                KeyboardEventVariant::Press(ke) => {
-                    let mut skip_char = false;
-
-                    let mut events: Vec<_> = keysym_to_vkey(ke.keysym)
-                        .map(|k| {
-                            if k == KeyCode::Backspace {
-                                skip_char = true;
-                            }
-                            iced_runtime::core::Event::Keyboard(
-                                keyboard::Event::KeyPressed {
-                                    key_code: k,
-                                    modifiers: modifiers_to_native(*modifiers),
-                                },
-                            )
-                        })
-                        .into_iter()
-                        .collect();
-                    if !skip_char {
-                        if let Some(s) = ke.utf8 {
-                            let mut chars = s
-                                .chars()
-                                .map(|c| {
-                                    iced_runtime::core::Event::Keyboard(
-                                        keyboard::Event::CharacterReceived(c),
-                                    )
-                                })
-                                .collect();
-                            events.append(&mut chars);
-                        }
-                    }
-                    events
-                }
-                KeyboardEventVariant::Repeat(ke) => {
-                    let mut skip_char = false;
-
-                    let mut events: Vec<_> = keysym_to_vkey(ke.keysym)
-                        .map(|k| {
-                            if k == KeyCode::Backspace {
-                                skip_char = true;
-                            }
-                            iced_runtime::core::Event::Keyboard(
-                                keyboard::Event::KeyPressed {
-                                    key_code: k,
-                                    modifiers: modifiers_to_native(*modifiers),
-                                },
-                            )
-                        })
-                        .into_iter()
-                        .collect();
-                    if !skip_char {
-                        if let Some(s) = ke.utf8 {
-                            let mut chars = s
-                                .chars()
-                                .map(|c| {
-                                    iced_runtime::core::Event::Keyboard(
-                                        keyboard::Event::CharacterReceived(c),
-                                    )
-                                })
-                                .collect();
-                            events.append(&mut chars);
-                        }
-                    }
-                    events
-                }
-                KeyboardEventVariant::Release(k) => keysym_to_vkey(k.keysym)
-                    .map(|k| {
-                        iced_runtime::core::Event::Keyboard(
-                            keyboard::Event::KeyReleased {
-                                key_code: k,
-                                modifiers: modifiers_to_native(*modifiers),
-                            },
-                        )
-                    })
-                    .into_iter()
-                    .collect(),
-                KeyboardEventVariant::Modifiers(new_mods) => {
-                    *modifiers = new_mods;
-                    vec![iced_runtime::core::Event::Keyboard(
-                        keyboard::Event::ModifiersChanged(modifiers_to_native(
-                            new_mods,
-                        )),
+            SctkEvent::InputMethodKeyboardEvent { variant } => {
+                match variant {
+                    InputMethodKeyboardEventVariant::Press(key) =>
+                        vec![iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethodKeyboard(
+                                    wayland::InputMethodKeyboardEvent::Press(
+                                        key.into(),
+                                    ),
+                                ),
+                            ),
+                        )],
+                    InputMethodKeyboardEventVariant::Repeat(key) => 
+                        vec![iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethodKeyboard(
+                                    wayland::InputMethodKeyboardEvent::Repeat(
+                                        key.into(),
+                                    ),
+                                ),
+                            ),
+                        )],
+                    InputMethodKeyboardEventVariant::Release(key) => 
+                        vec![iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethodKeyboard(
+                                    wayland::InputMethodKeyboardEvent::Release(
+                                        key.into(),
+                                    ),
+                                ),
+                            ),
+                        )],
+                    InputMethodKeyboardEventVariant::Modifiers(modifiers) =>
+                        vec![iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(
+                            wayland::Event::InputMethodKeyboard(
+                                wayland::InputMethodKeyboardEvent::Modifiers(modifiers.into()),
+                            ),
+                        ),
                     )]
                 }
-            },
+            }
             SctkEvent::KeyboardEvent {
                 variant,
                 kbd_id: _,

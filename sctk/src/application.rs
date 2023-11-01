@@ -9,8 +9,9 @@ use crate::{
         control_flow::ControlFlow, proxy, state::SctkState, SctkEventLoop,
     },
     sctk_event::{
-        DataSourceEvent, IcedSctkEvent, KeyboardEventVariant,
-        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
+        DataSourceEvent, IcedSctkEvent,
+        KeyboardEventVariant, LayerSurfaceEventVariant, PopupEventVariant,
+        SctkEvent, StartCause, InputMethodKeyboardEventVariant,
     },
     settings,
 };
@@ -23,7 +24,7 @@ use iced_accessibility::{
 };
 use iced_futures::{
     core::{
-        event::{Event as CoreEvent, Status},
+        event::{Event as CoreEvent, Status, PlatformSpecific, wayland},
         layout::Limits,
         mouse,
         renderer::Style,
@@ -95,6 +96,8 @@ pub enum Event<Message> {
     Activation(platform_specific::wayland::activation::Action<Message>),
     /// data session lock requests from the client
     SessionLock(platform_specific::wayland::session_lock::Action<Message>),
+    /// virtual Keyboard requests from the client
+    VirtualKeyboard(platform_specific::wayland::virtual_keyboard::Action<Message>),
     /// request sctk to set the cursor of the active pointer
     SetCursor(Interaction),
     /// Application Message
@@ -487,22 +490,23 @@ where
                             }
                         }
                     },
-                    SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
-                        KeyboardEventVariant::Press(_)
-                        | KeyboardEventVariant::Release(_)
-                        | KeyboardEventVariant::Repeat(_) => {}
-                        KeyboardEventVariant::Modifiers(mods) => {
-                            //TODO: fix this! If needed?
-                            if let Some(state) = kbd_surface_id
-                                .as_ref()
-                                .and_then(|id| surface_ids.get(id))
-                                .and_then(|id| states.get_mut(&id.inner()))
-                            {
-                                state.modifiers = mods;
-                            }
+                    SctkEvent::InputMethodKeyboardEvent { variant } => 
+                    match variant {
+                        InputMethodKeyboardEventVariant::Press(ke) => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethodKeyboard(
+                                            wayland::InputMethodKeyboardEvent::Press(ke.into())
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
                         }
-                        KeyboardEventVariant::Leave(_) => unreachable!(),
-                        KeyboardEventVariant::Enter(_) => unreachable!(),
+                        InputMethodKeyboardEventVariant::Release(_)
+                        | InputMethodKeyboardEventVariant::Repeat(_) => {}
+                        InputMethodKeyboardEventVariant::Modifiers(_) => {}
                     },
                     SctkEvent::WindowEvent { variant, id } => match variant {
                         crate::sctk_event::WindowEventVariant::Created(id, native_id) => {
@@ -2153,6 +2157,10 @@ where
             }
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::SessionLock(session_lock_action))) => {
                 proxy.send_event(Event::SessionLock(session_lock_action));
+            }
+            command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::VirtualKeyboard(virtual_keyboard_action))) 
+            => {
+                proxy.send_event(Event::VirtualKeyboard(virtual_keyboard_action))
             }
             _ => {}
         };

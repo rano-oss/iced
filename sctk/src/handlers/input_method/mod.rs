@@ -24,7 +24,7 @@ use sctk::globals::GlobalData;
 use crate::delegate_input_method_keyboard;
 use crate::event_loop::state::SctkState;
 use crate::sctk_event::{
-    InputMethodEventVariant, KeyboardEventVariant, SctkEvent,
+    InputMethodEventVariant, InputMethodKeyboardEventVariant, SctkEvent,
 };
 
 use self::keyboard::InputMethodKeyboardHandler;
@@ -64,7 +64,7 @@ impl<T: 'static> InputMethodManager<T> {
             loop_handle,
             Box::new(move |state, _kbd: &ZwpInputMethodKeyboardGrabV2, e| {
                 state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-                    variant: KeyboardEventVariant::Repeat(e),
+                    variant: InputMethodKeyboardEventVariant::Repeat(e),
                 })
             }),
         )
@@ -104,13 +104,11 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
     ) {
         match event {
             zwp_input_method_v2::Event::Activate => {
-                println!("Activate");
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Activate,
                 })
             }
             zwp_input_method_v2::Event::Deactivate => {
-                println!("DeActivate");
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Deactivate,
                 })
@@ -174,7 +172,7 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
         event: KeyEvent,
     ) {
         self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-            variant: KeyboardEventVariant::Press(event),
+            variant: InputMethodKeyboardEventVariant::Press(event),
         });
     }
 
@@ -187,7 +185,7 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
         event: KeyEvent,
     ) {
         self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-            variant: KeyboardEventVariant::Release(event),
+            variant: InputMethodKeyboardEventVariant::Release(event),
         });
     }
 
@@ -200,7 +198,7 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
         modifiers: Modifiers,
     ) {
         self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-            variant: KeyboardEventVariant::Modifiers(modifiers),
+            variant: InputMethodKeyboardEventVariant::Modifiers(modifiers),
         });
     }
 }

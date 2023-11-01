@@ -46,4 +46,6 @@ pub enum Event {
     Frame(Instant, WlSurface, Id),
     /// Input Method
     InputMethod(InputMethodEvent),
+    /// Input Method Keyboard Event
+    InputMethodKeyboard(InputMethodKeyboardEvent),
 }

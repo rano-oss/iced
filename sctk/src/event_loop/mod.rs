@@ -1331,6 +1331,11 @@ where
                             }
                         }
                     }
+                    Event::VirtualKeyboard(action) => {
+                        match action.inner {
+                            platform_specific::wayland::virtual_keyboard::ActionInner::KeyPressed(key_event) => self.state.press_key(key_event),
+                        }
+                    },
                 }
             }
 
