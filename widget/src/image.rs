@@ -12,7 +12,6 @@ use crate::core::{
     ContentFit, Element, Layout, Length, Rectangle, Size, Vector, Widget,
 };
 
-use std::borrow::Cow;
 use std::hash::Hash;
 
 pub use image::Handle;
@@ -46,6 +45,7 @@ pub struct Image<'a, Handle> {
     width: Length,
     height: Length,
     content_fit: ContentFit,
+    border_radius: [f32; 4],
     phantom_data: std::marker::PhantomData<&'a ()>,
 }
 
@@ -64,8 +64,15 @@ impl<'a, Handle> Image<'a, Handle> {
             width: Length::Shrink,
             height: Length::Shrink,
             content_fit: ContentFit::Contain,
+            border_radius: [0.0; 4],
             phantom_data: std::marker::PhantomData,
         }
+    }
+
+    /// Sets the border radius of the image.
+    pub fn border_radius(mut self, border_radius: [f32; 4]) -> Self {
+        self.border_radius = border_radius;
+        self
     }
 
     /// Sets the width of the [`Image`] boundaries.
@@ -134,6 +141,7 @@ pub fn layout<Renderer, Handle>(
     width: Length,
     height: Length,
     content_fit: ContentFit,
+    border_radius: [f32; 4],
 ) -> layout::Node
 where
     Renderer: image::Renderer<Handle = Handle>,
@@ -172,6 +180,7 @@ pub fn draw<Renderer, Handle>(
     layout: Layout<'_>,
     handle: &Handle,
     content_fit: ContentFit,
+    border_radius: [f32; 4],
 ) where
     Renderer: image::Renderer<Handle = Handle>,
     Handle: Clone + Hash,
@@ -194,7 +203,7 @@ pub fn draw<Renderer, Handle>(
             ..bounds
         };
 
-        renderer.draw(handle.clone(), drawing_bounds + offset)
+        renderer.draw(handle.clone(), drawing_bounds + offset, border_radius);
     };
 
     if adjusted_fit.width > bounds.width || adjusted_fit.height > bounds.height
@@ -231,6 +240,7 @@ where
             self.width,
             self.height,
             self.content_fit,
+            self.border_radius,
         )
     }
 
@@ -244,7 +254,13 @@ where
         _cursor: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
-        draw(renderer, layout, &self.handle, self.content_fit)
+        draw(
+            renderer,
+            layout,
+            &self.handle,
+            self.content_fit,
+            self.border_radius,
+        )
     }
 
     #[cfg(feature = "a11y")]

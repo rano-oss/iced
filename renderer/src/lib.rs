@@ -216,8 +216,17 @@ impl<T> crate::core::image::Renderer for Renderer<T> {
         delegate!(self, renderer, renderer.dimensions(handle))
     }
 
-    fn draw(&mut self, handle: crate::core::image::Handle, bounds: Rectangle) {
-        delegate!(self, renderer, renderer.draw(handle, bounds));
+    fn draw(
+        &mut self,
+        handle: crate::core::image::Handle,
+        bounds: Rectangle,
+        border_radius: [f32; 4],
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.draw(handle, bounds, border_radius,)
+        );
     }
 }
 

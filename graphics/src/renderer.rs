@@ -226,8 +226,17 @@ where
         self.backend().dimensions(handle)
     }
 
-    fn draw(&mut self, handle: image::Handle, bounds: Rectangle) {
-        self.primitives.push(Primitive::Image { handle, bounds })
+    fn draw(
+        &mut self,
+        handle: image::Handle,
+        bounds: Rectangle,
+        border_radius: [f32; 4],
+    ) {
+        self.primitives.push(Primitive::Image {
+            handle,
+            bounds,
+            border_radius,
+        })
     }
 }
 

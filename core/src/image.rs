@@ -178,5 +178,10 @@ pub trait Renderer: crate::Renderer {
 
     /// Draws an image with the given [`Handle`] and inside the provided
     /// `bounds`.
-    fn draw(&mut self, handle: Self::Handle, bounds: Rectangle);
+    fn draw(
+        &mut self,
+        handle: Self::Handle,
+        bounds: Rectangle,
+        border_radius: [f32; 4],
+    );
 }

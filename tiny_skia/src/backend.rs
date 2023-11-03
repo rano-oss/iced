@@ -402,7 +402,11 @@ impl Backend {
                 );
             }
             #[cfg(feature = "image")]
-            Primitive::Image { handle, bounds } => {
+            Primitive::Image {
+                handle,
+                bounds,
+                border_radius,
+            } => {
                 let physical_bounds = (*bounds + translation) * scale_factor;
 
                 if !clip_bounds.intersects(&physical_bounds) {
@@ -418,8 +422,14 @@ impl Backend {
                 )
                 .post_scale(scale_factor, scale_factor);
 
-                self.raster_pipeline
-                    .draw(handle, *bounds, pixels, transform, clip_mask);
+                self.raster_pipeline.draw(
+                    handle,
+                    *bounds,
+                    pixels,
+                    transform,
+                    clip_mask,
+                    *border_radius,
+                );
             }
             #[cfg(not(feature = "image"))]
             Primitive::Image { .. } => {
