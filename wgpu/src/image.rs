@@ -366,7 +366,7 @@ impl Pipeline {
         for image in images {
             match &image {
                 #[cfg(feature = "image")]
-                layer::Image::Raster { handle, bounds } => {
+                layer::Image::Raster { handle, bounds, .. } => {
                     if let Some(atlas_entry) = raster_cache.upload(
                         device,
                         encoder,

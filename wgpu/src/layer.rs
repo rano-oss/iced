@@ -160,12 +160,17 @@ impl<'a> Layer<'a> {
 
                 layer.quads.add(quad, background);
             }
-            Primitive::Image { handle, bounds } => {
+            Primitive::Image {
+                handle,
+                bounds,
+                border_radius,
+            } => {
                 let layer = &mut layers[current_layer];
 
                 layer.images.push(Image::Raster {
                     handle: handle.clone(),
                     bounds: *bounds + translation,
+                    border_radius: *border_radius,
                 });
             }
             Primitive::Svg {
