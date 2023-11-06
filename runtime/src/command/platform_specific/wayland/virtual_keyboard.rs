@@ -1,6 +1,6 @@
 use std::{fmt, marker::PhantomData};
 
-use iced_core::event::wayland::KeyEvent;
+use iced_core::event::wayland::{KeyEvent, RawModifiers};
 use iced_futures::MaybeSend;
 
 /// Virtual keyboard action
@@ -28,8 +28,12 @@ impl<T> fmt::Debug for Action<T> {
 
 /// Virtual keyboard Actions
 pub enum ActionInner {
-    /// create a window and receive a message with its Id
+    /// Forward a keypress to client
     KeyPressed(KeyEvent),
+    /// Forward a keyrelease to client
+    KeyReleased(KeyEvent),
+    /// Forward modifiers to client
+    Modifiers(RawModifiers),
 }
 
 impl<T> Action<T> {
@@ -50,6 +54,12 @@ impl fmt::Debug for ActionInner {
         match self {
             Self::KeyPressed(key) => {
                 f.debug_tuple("Key event").field(key).finish()
+            }
+            Self::KeyReleased(key) => {
+                f.debug_tuple("Key event").field(key).finish()
+            }
+            Self::Modifiers(modifiers) => {
+                f.debug_tuple("Modifier event").field(modifiers).finish()
             }
         }
     }

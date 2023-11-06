@@ -1018,7 +1018,7 @@ pub fn run_command<A, C, E>(
                 window::Action::GainFocus => {
                     window.focus_window();
                 }
-                window::Action::ChangeLevel(level) => {
+                window::Action::ChangeLevel(_level) => {
                     // window.set_window_level(conversion::window_level(level));
                 }
                 window::Action::FetchId(tag) => {

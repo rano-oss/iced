@@ -1,6 +1,5 @@
 //! Show toggle controls using togglers.
 
-
 use crate::core::alignment;
 use crate::core::event;
 use crate::core::layout;

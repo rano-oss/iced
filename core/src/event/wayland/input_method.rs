@@ -1,4 +1,11 @@
-use sctk::seat::keyboard::Keysym;
+use sctk::{
+    seat::keyboard::Keysym, 
+    reexports::{
+        client::WEnum, protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
+            ChangeCause, ContentHint, ContentPurpose
+        }
+    }
+};
 
 /// input method events
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -7,7 +14,30 @@ pub enum InputMethodEvent {
     Activate,
     /// A text input is not interacting with the application anymore
     Deactivate,
+    /// The surrounding plain text around the cursor, excluding the preedit text
+    SurroundingText {
+        /// plain text 
+        text: String, 
+        /// Cursor position
+        cursor: u32, 
+        /// Anchor position
+        anchor: u32 
+    },
+    /// indicates the cause of surrounding text change
+    TextChangeCause(WEnum<ChangeCause>),
+    /// content purpose and hint
+    ContentType(WEnum<ContentHint>, WEnum<ContentPurpose>),
+    /// apply state
+    Done,
 }
+
+
+// /// Input method keyboard events
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub enum InputMethodPopupEvent {
+//     /// An input method popup is created
+//     Created
+// }
 
 /// Input method keyboard events
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,7 +49,7 @@ pub enum InputMethodKeyboardEvent {
     /// A key is repeated
     Repeat(KeyEvent),
     /// Modifiers are updated
-    Modifiers(Modifiers),
+    Modifiers(Modifiers, RawModifiers),
 }
 
 /// Data associated with a key press or release event.
@@ -33,7 +63,7 @@ pub struct KeyEvent {
 
     /// The interpreted symbol of the key.
     ///
-    /// This corresponds to one of the assoiated values on the [`Keysym`] type.
+    /// This corresponds to one of the associated values on the [`Keysym`] type.
     pub keysym: Keysym,
 
     /// UTF-8 interpretation of the entered text.
@@ -70,6 +100,19 @@ pub struct Modifiers {
 
     /// The "Num lock" key
     pub num_lock: bool,
+}
+
+/// Raw modifiers
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RawModifiers {
+    /// Modifiers depressed
+    pub mods_depressed: u32,
+    /// Modifiers latched
+    pub mods_latched: u32,
+    /// Modifiers locked
+    pub mods_locked: u32,
+    /// Modifiers group
+    pub group: u32,
 }
 
 impl From<sctk::seat::keyboard::KeyEvent> for KeyEvent {

@@ -13,7 +13,6 @@ use crate::core::{
     Size, Widget,
 };
 
-
 use std::ops::RangeInclusive;
 
 use iced_renderer::core::{BorderRadius, Degrees, Radians};

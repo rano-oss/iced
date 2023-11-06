@@ -5,6 +5,7 @@ use crate::{
         pointer_button_to_native,
     },
     dpi::PhysicalSize,
+    handlers::input_method::keyboard::RawModifiers,
 };
 
 use iced_futures::core::event::{
@@ -41,7 +42,13 @@ use sctk::{
     },
 };
 use std::{collections::HashMap, time::Instant};
-use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use wayland_backend::protocol::WEnum;
+use wayland_protocols::wp::{
+    text_input::zv3::client::zwp_text_input_v3::{
+        ChangeCause, ContentHint, ContentPurpose,
+    },
+    viewporter::client::wp_viewport::WpViewport,
+};
 
 pub enum IcedSctkEvent<T> {
     /// Emitted when new events arrive from the OS to be processed.
@@ -148,6 +155,10 @@ pub enum SctkEvent {
     },
     InputMethodKeyboardEvent {
         variant: InputMethodKeyboardEventVariant,
+    },
+    InputMethodPopupEvent {
+        variant: InputMethodPopupEventVariant,
+        id: WlSurface,
     },
     // TODO data device & touch
 
@@ -295,6 +306,14 @@ pub enum KeyboardEventVariant {
 pub enum InputMethodEventVariant {
     Activate,
     Deactivate,
+    SurroundingText{
+        text: String,
+        cursor: u32,
+        anchor: u32,
+    },
+    TextChangeCause(WEnum<ChangeCause>),
+    ContentType(WEnum<ContentHint>, WEnum<ContentPurpose>),
+    Done,
 }
 
 #[derive(Debug, Clone)]
@@ -302,7 +321,15 @@ pub enum InputMethodKeyboardEventVariant {
     Press(KeyEvent),
     Repeat(KeyEvent),
     Release(KeyEvent),
-    Modifiers(Modifiers),
+    Modifiers(Modifiers, RawModifiers),
+}
+
+#[derive(Debug, Clone)]
+pub enum InputMethodPopupEventVariant {
+    Created(ObjectId, SurfaceId),
+     /// Scale Factor
+    ScaleFactorChanged(f64, Option<WpViewport>),
+    Size(u32, u32),
 }
 
 #[derive(Debug, Clone)]
@@ -498,49 +525,59 @@ impl SctkEvent {
                         )),
                     )]
                 }
+                InputMethodEventVariant::SurroundingText { text:_, cursor:_, anchor:_ } => todo!(),
+                InputMethodEventVariant::TextChangeCause(_) => todo!(),
+                InputMethodEventVariant::ContentType(_, _) => todo!(),
+                InputMethodEventVariant::Done => todo!(),
             },
-            SctkEvent::InputMethodKeyboardEvent { variant } => {
-                match variant {
-                    InputMethodKeyboardEventVariant::Press(key) =>
-                        vec![iced_runtime::core::Event::PlatformSpecific(
-                            PlatformSpecific::Wayland(
-                                wayland::Event::InputMethodKeyboard(
-                                    wayland::InputMethodKeyboardEvent::Press(
-                                        key.into(),
-                                    ),
-                                ),
-                            ),
-                        )],
-                    InputMethodKeyboardEventVariant::Repeat(key) => 
-                        vec![iced_runtime::core::Event::PlatformSpecific(
-                            PlatformSpecific::Wayland(
-                                wayland::Event::InputMethodKeyboard(
-                                    wayland::InputMethodKeyboardEvent::Repeat(
-                                        key.into(),
-                                    ),
-                                ),
-                            ),
-                        )],
-                    InputMethodKeyboardEventVariant::Release(key) => 
-                        vec![iced_runtime::core::Event::PlatformSpecific(
-                            PlatformSpecific::Wayland(
-                                wayland::Event::InputMethodKeyboard(
-                                    wayland::InputMethodKeyboardEvent::Release(
-                                        key.into(),
-                                    ),
-                                ),
-                            ),
-                        )],
-                    InputMethodKeyboardEventVariant::Modifiers(modifiers) =>
-                        vec![iced_runtime::core::Event::PlatformSpecific(
+            SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
+                InputMethodKeyboardEventVariant::Press(key) => {
+                    vec![iced_runtime::core::Event::PlatformSpecific(
                         PlatformSpecific::Wayland(
                             wayland::Event::InputMethodKeyboard(
-                                wayland::InputMethodKeyboardEvent::Modifiers(modifiers.into()),
+                                wayland::InputMethodKeyboardEvent::Press(
+                                    key.into(),
+                                ),
                             ),
                         ),
                     )]
                 }
-            }
+                InputMethodKeyboardEventVariant::Repeat(key) => {
+                    vec![iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(
+                            wayland::Event::InputMethodKeyboard(
+                                wayland::InputMethodKeyboardEvent::Repeat(
+                                    key.into(),
+                                ),
+                            ),
+                        ),
+                    )]
+                }
+                InputMethodKeyboardEventVariant::Release(key) => {
+                    vec![iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(
+                            wayland::Event::InputMethodKeyboard(
+                                wayland::InputMethodKeyboardEvent::Release(
+                                    key.into(),
+                                ),
+                            ),
+                        ),
+                    )]
+                }
+                InputMethodKeyboardEventVariant::Modifiers(
+                    modifiers,
+                    raw_modifiers,
+                ) => vec![iced_runtime::core::Event::PlatformSpecific(
+                    PlatformSpecific::Wayland(
+                        wayland::Event::InputMethodKeyboard(
+                            wayland::InputMethodKeyboardEvent::Modifiers(
+                                modifiers.into(),
+                                raw_modifiers.into(),
+                            ),
+                        ),
+                    ),
+                )],
+            },
             SctkEvent::KeyboardEvent {
                 variant,
                 kbd_id: _,
@@ -590,6 +627,7 @@ impl SctkEvent {
                                 ),
                             ))
                         }
+                        SurfaceIdWrapper::InputMethodPopup(_) => None,
                     })
                     .into_iter()
                     .chain([iced_runtime::core::Event::PlatformSpecific(
@@ -643,6 +681,7 @@ impl SctkEvent {
                                 ),
                             ))
                         }
+                        SurfaceIdWrapper::InputMethodPopup(_) => None,
                     })
                     .into_iter()
                     .chain([iced_runtime::core::Event::PlatformSpecific(
@@ -1060,6 +1099,11 @@ impl SctkEvent {
                 .into_iter()
                 .collect()
             }
+            SctkEvent::InputMethodPopupEvent { id:_, variant } => match variant {
+                InputMethodPopupEventVariant::Created(_,_) => Default::default(),
+                InputMethodPopupEventVariant::ScaleFactorChanged(_, _) => Default::default(),
+                InputMethodPopupEventVariant::Size(_, _) => Default::default(),
+            },
         }
     }
 }

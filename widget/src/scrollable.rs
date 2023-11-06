@@ -1,7 +1,6 @@
 //! Navigate an endless amount of content with a scrollbar.
 use iced_runtime::core::widget::Id;
 
-
 use crate::core::event::{self, Event};
 use crate::core::keyboard;
 use crate::core::layout;

@@ -7,14 +7,14 @@ use crate::{
     application::Event,
     dpi::LogicalSize,
     handlers::{
-        input_method::InputMethodManager,
+        input_method::{InputMethodManager, InputMethodPopup},
         virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
         LayerSurfaceEventVariant, PopupEventVariant, SctkEvent,
-        WindowEventVariant,
+        WindowEventVariant, InputMethodPopupEventVariant,
     },
 };
 
@@ -288,6 +288,7 @@ pub struct SctkState<T> {
     pub(crate) layer_surfaces: Vec<SctkLayerSurface<T>>,
     pub(crate) popups: Vec<SctkPopup<T>>,
     pub(crate) lock_surfaces: Vec<SctkLockSurface>,
+    pub(crate) input_method_popup: Option<InputMethodPopup>,
     pub(crate) dnd_source: Option<Dnd<T>>,
     pub(crate) _kbd_focus: Option<WlSurface>,
 
@@ -397,6 +398,24 @@ impl<T> SctkState<T> {
                 ),
                 id: window.window.wl_surface().clone(),
             });
+        }
+
+        if let Some(input_method_popup) = self.input_method_popup.as_mut() {
+            if legacy && input_method_popup.wp_fractional_scale.is_some() {
+                return;
+            }
+            input_method_popup.scale_factor = Some(scale_factor);
+            if legacy {
+                input_method_popup.wl_surface.set_buffer_scale(scale_factor as _);
+            }
+            self.compositor_updates.push(
+                SctkEvent::InputMethodPopupEvent { 
+                    variant: InputMethodPopupEventVariant::ScaleFactorChanged(
+                        scale_factor,
+                        input_method_popup.wp_viewport.clone()), 
+                    id: input_method_popup.wl_surface.clone() 
+                }
+            )
         }
 
         if let Some(popup) = self

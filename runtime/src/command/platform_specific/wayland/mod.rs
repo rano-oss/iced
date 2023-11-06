@@ -6,6 +6,10 @@ use iced_futures::MaybeSend;
 pub mod activation;
 /// data device Actions
 pub mod data_device;
+/// input method actions
+pub mod input_method;
+/// input method popup actions
+pub mod input_method_popup;
 /// layer surface actions
 pub mod layer_surface;
 /// popup actions
@@ -33,6 +37,10 @@ pub enum Action<T> {
     SessionLock(session_lock::Action<T>),
     /// virtual keyboard
     VirtualKeyboard(virtual_keyboard::Action<T>),
+    /// input method
+    InputMethod(input_method::Action<T>),
+    /// input method popup
+    InputMethodPopup(input_method_popup::Action<T>)
 }
 
 impl<T> Action<T> {
@@ -53,6 +61,8 @@ impl<T> Action<T> {
             Action::Activation(a) => Action::Activation(a.map(f)),
             Action::SessionLock(a) => Action::SessionLock(a.map(f)),
             Action::VirtualKeyboard(a) => Action::VirtualKeyboard(a.map(f)),
+            Action::InputMethod(a) => Action::InputMethod(a.map(f)),
+            Action::InputMethodPopup(a) => Action::InputMethodPopup(a.map(f)),
         }
     }
 }
@@ -77,6 +87,11 @@ impl<T> Debug for Action<T> {
             Self::VirtualKeyboard(arg0) => {
                 f.debug_tuple("VirtualKeyboard").field(arg0).finish()
             }
+            Self::InputMethod(arg0) => {
+                f.debug_tuple("InputMethod").field(arg0).finish()
+            },
+            Self::InputMethodPopup(arg0) => 
+                f.debug_tuple("InputMethodPopup").field(arg0).finish(),
         }
     }
 }

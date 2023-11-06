@@ -2,10 +2,13 @@ pub mod keyboard;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use iced_runtime::command::platform_specific::wayland::input_method_popup::InputMethodPopupSettings;
+use iced_runtime::window;
 use sctk::reexports::calloop::LoopHandle;
 use sctk::reexports::client::globals::{BindError, GlobalList};
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::Dispatch;
+use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{
     delegate_dispatch, Connection, Proxy, QueueHandle,
 };
@@ -27,7 +30,7 @@ use crate::sctk_event::{
     InputMethodEventVariant, InputMethodKeyboardEventVariant, SctkEvent,
 };
 
-use self::keyboard::InputMethodKeyboardHandler;
+use self::keyboard::{InputMethodKeyboardHandler, RawModifiers};
 
 #[derive(Debug)]
 pub struct InputMethodManager<T> {
@@ -114,16 +117,31 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
                 })
             }
             zwp_input_method_v2::Event::SurroundingText {
-                text: _,
-                cursor: _,
-                anchor: _,
-            } => {}
-            zwp_input_method_v2::Event::TextChangeCause { cause: _ } => {}
-            zwp_input_method_v2::Event::ContentType {
-                hint: _,
-                purpose: _,
-            } => {}
-            zwp_input_method_v2::Event::Done => {}
+                text,
+                cursor,
+                anchor,
+            } => state.sctk_events.push(SctkEvent::InputMethodEvent {
+                variant: InputMethodEventVariant::SurroundingText{
+                    text, cursor, anchor,
+                },
+            }),
+            zwp_input_method_v2::Event::TextChangeCause { cause } => {
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::TextChangeCause(cause),
+                })
+            }
+            zwp_input_method_v2::Event::ContentType { hint, purpose } => {
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::ContentType(
+                        hint, purpose,
+                    ),
+                })
+            }
+            zwp_input_method_v2::Event::Done => {
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::Done,
+                })
+            }
             zwp_input_method_v2::Event::Unavailable => {
                 panic!("Another input method already present!")
             }
@@ -132,7 +150,14 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
     }
 }
 
-pub struct InputMethodPopup {}
+#[derive(Debug, Clone)]
+pub struct InputMethodPopup {
+    popup_role: Option<ZwpInputPopupSurfaceV2>,
+    pub wl_surface: WlSurface,
+    pub wp_viewport: Option<wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport>,
+    pub scale_factor: Option<f64>,
+    pub wp_fractional_scale: Option<wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1>,
+}
 
 impl<T: 'static>
     Dispatch<ZwpInputPopupSurfaceV2, InputMethodPopup, SctkState<T>>
@@ -152,7 +177,9 @@ impl<T: 'static>
                 y: _,
                 width: _,
                 height: _,
-            } => {}
+            } => {
+                // just let the compositor decide placement
+            }
             _ => unreachable!(),
         }
     }
@@ -196,11 +223,84 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
         _keyboard: &ZwpInputMethodKeyboardGrabV2,
         _serial: u32,
         modifiers: Modifiers,
+        raw_modifiers: RawModifiers,
     ) {
         self.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-            variant: InputMethodKeyboardEventVariant::Modifiers(modifiers),
+            variant: InputMethodKeyboardEventVariant::Modifiers(
+                modifiers,
+                raw_modifiers,
+            ),
         });
     }
 }
 
 delegate_input_method_keyboard!(@<T: 'static> SctkState<T>);
+
+impl <T> SctkState<T>
+where 
+    T: 'static + Debug,
+{
+    pub fn commit(&mut self, serial: u32) {
+        let seat = self.seats.first().expect("seat not present");
+        if let Some(im) = seat.input_method.as_ref() {
+            im.commit(serial)
+        }
+    }
+
+    pub fn commit_string(&mut self, string: String) {
+        let seat = self.seats.first().expect("seat not present");
+        if let Some(im) = seat.input_method.as_ref() {
+            im.commit_string(string)
+        }
+    }
+    
+    pub fn set_preedit_string(&mut self, string: String, cursor_begin: i32, cursor_end: i32) {
+        let seat = self.seats.first().expect("seat not present");
+        if let Some(im) = seat.input_method.as_ref() {
+            im.set_preedit_string(string, cursor_begin, cursor_end)
+        }
+    }
+    
+    pub fn delete_surrounding_text(&mut self, before_length: u32, after_length: u32) {
+        let seat = self.seats.first().expect("seat not present");
+        if let Some(im) = seat.input_method.as_ref() {
+            im.delete_surrounding_text(before_length, after_length)
+        }
+    }
+
+    pub fn get_input_method_popup(&mut self, settings: InputMethodPopupSettings) -> (window::Id, WlSurface) {
+        let wl_surface = self.compositor_state.create_surface(&self.queue_handle);
+        wl_surface.commit();
+        let wp_viewport = self.viewporter_state.as_ref().map(|state| {
+            state.get_viewport(&wl_surface, &self.queue_handle)
+        });
+        let wp_fractional_scale =
+            self.fractional_scaling_manager.as_ref().map(|fsm| {
+                fsm.fractional_scaling(&wl_surface, &self.queue_handle)
+            });
+        self.input_method_popup = Some(
+            InputMethodPopup{
+                // id: settings.id,
+                wl_surface: wl_surface.clone(),
+                popup_role: None,
+                wp_viewport,
+                scale_factor: None,
+                wp_fractional_scale,
+            }
+        );
+        (settings.id,wl_surface)
+    }
+
+    pub fn show_input_method_popup(&mut self) {
+        let seat = self.seats.first().expect("seat not present");
+        let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
+        popup_state.popup_role = seat.input_method.as_ref().map(|im| {
+            im.get_input_popup_surface(&popup_state.wl_surface, &self.queue_handle, popup_state.clone())
+        });
+    }
+
+    pub fn hide_input_method_popup(&mut self) {
+        let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
+        popup_state.popup_role = None;
+    }
+}

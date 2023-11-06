@@ -1,40 +1,39 @@
 use iced::{
     event::{
         self,
-        wayland::{InputMethodEvent, InputMethodKeyboardEvent, KeyEvent},
+        wayland::{InputMethodEvent, InputMethodKeyboardEvent, KeyEvent, RawModifiers, Modifiers},
     },
     subscription,
-    wayland::{virtual_keyboard::virtual_keyboard_key_press, InitialSurface, actions::window::SctkWindowSettings},
-    widget::container,
+    wayland::{
+        actions::{virtual_keyboard::ActionInner, input_method_popup::InputMethodPopupSettings},
+        virtual_keyboard::virtual_keyboard_action, InitialSurface, input_method::{show_input_method_popup, get_input_method_popup},
+    },
+    widget::{container, Container, Row, Column, Text},
     window, Application, Color, Command, Element, Event, Subscription, Theme,
+    Settings, alignment::{Vertical, Horizontal}, Length,
 };
 use iced_style::application;
 use std::fmt::Debug;
 
-fn main() {
-    let mut settings = iced::Settings::default();
-    settings.initial_surface = InitialSurface::None;
-    InputMethod::run(settings).unwrap();
+fn main() -> iced::Result {
+    let initial_surface = InputMethodPopupSettings::default();
+    let settings = Settings {
+        initial_surface: InitialSurface::InputMethodPopup(initial_surface),
+        ..Settings::default()
+    };
+    InputMethod::run(settings)
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct InputMethod {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Message {
     Activate,
     Deactivate,
     KeyPressed(KeyEvent),
-}
-
-impl Debug for Message {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Message::Activate => write!(f, "Message::Activate"),
-            Message::Deactivate => write!(f, "Message::Deactivate"),
-            Message::KeyPressed(_key) => write!(f, "Message::KeyPressed"),
-        }
-    }
+    KeyReleased(KeyEvent),
+    Modifiers(Modifiers, RawModifiers)
 }
 
 impl Application for InputMethod {
@@ -55,72 +54,66 @@ impl Application for InputMethod {
         match message {
             Message::Activate => Command::none(),
             Message::Deactivate => Command::none(),
-            Message::KeyPressed(key) => virtual_keyboard_key_press(key),
+            Message::KeyPressed(key) => {
+                // get_input_method_popup(InputMethodPopupSettings::default());
+                show_input_method_popup()
+                // virtual_keyboard_action(ActionInner::KeyPressed(key))
+            },
+            Message::KeyReleased(key) => virtual_keyboard_action(ActionInner::KeyReleased(key)),
+            Message::Modifiers(_, raw_modifiers) => virtual_keyboard_action(ActionInner::Modifiers(raw_modifiers)),
         }
     }
 
     fn view(&self, _id: window::Id) -> Element<Message> {
-        unimplemented!();
+        let row = Row::new().push(
+            Text::new("Hello World!")
+                .width(Length::Fill)
+                .horizontal_alignment(Horizontal::Center),
+        );
+        let column = Column::new().push(row);
+        let content: Element<_> = column.into();
+        Container::new(content)
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center)
+        .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
         subscription::events_with(|event, status| match (event, status) {
-            // (
-            //     Event::PlatformSpecific(event::PlatformSpecific::Wayland(
-            //         event::wayland::Event::InputMethod(
-            //             InputMethodEvent::Activate,
-            //         ),
-            //     )),
-            //     _,
-            // ) => Some(Message::Activate),
             (
                 Event::PlatformSpecific(event::PlatformSpecific::Wayland(
-                    event::wayland::Event::InputMethodKeyboard(
-                        InputMethodKeyboardEvent::Press(key),
-                    ),
+                    event::wayland::Event::InputMethod(event),
                 )),
                 _,
-            ) => {
-                dbg!(&key);
-                Some(Message::KeyPressed(key))
+            ) => match event{
+                InputMethodEvent::Activate => {
+                    // dbg!("activate");
+                    Some(Message::Activate)
+                }
+                InputMethodEvent::Deactivate => Some(Message::Deactivate),
+                InputMethodEvent::SurroundingText { text, cursor, anchor } => None,
+                InputMethodEvent::TextChangeCause(_) => None,
+                InputMethodEvent::ContentType(_, _) => None,
+                InputMethodEvent::Done => None,
+            },
+            (
+                Event::PlatformSpecific(event::PlatformSpecific::Wayland(
+                    event::wayland::Event::InputMethodKeyboard(event),
+                )),
+                _,
+            ) => match event {
+                InputMethodKeyboardEvent::Press(key) => {
+                    // dbg!(&key);
+                    Some(Message::KeyPressed(key))
+                }
+                InputMethodKeyboardEvent::Release(key) => Some(Message::KeyReleased(key)),
+                InputMethodKeyboardEvent::Repeat(key) => Some(Message::KeyPressed(key)),
+                InputMethodKeyboardEvent::Modifiers(modifiers, raw_modifiers) => 
+                    Some(Message::Modifiers(modifiers, raw_modifiers)),
             }
-            // (Event::Keyboard(_), event::Status::Ignored) => todo!(),
-            // (Event::Keyboard(_), event::Status::Captured) => None,
-            // (Event::Mouse(_), event::Status::Ignored) => None,
-            // (Event::Mouse(_), event::Status::Captured) => None,
-            // (Event::Window(_, _), event::Status::Ignored) => None,
-            // (Event::Window(_, _), event::Status::Captured) => None,
-            // (Event::Touch(_), event::Status::Ignored) => None,
-            // (Event::Touch(_), event::Status::Captured) => None,
-            // // (Event::A11y(_, _), event::Status::Ignored) => None,
-            // // (Event::A11y(_, _), event::Status::Captured) => None,
-            // (Event::PlatformSpecific(ps), _) => match ps {
-            //     event::PlatformSpecific::Wayland(event) => match event {
-            //         event::wayland::Event::Layer(_, _, _) => None,
-            //         event::wayland::Event::Popup(_, _, _) => None,
-            //         event::wayland::Event::Output(_, _) => None,
-            //         event::wayland::Event::Window(_, _, _) => None,
-            //         event::wayland::Event::Seat(_, _) => None,
-            //         event::wayland::Event::DataSource(_) => None,
-            //         event::wayland::Event::DndOffer(_) => None,
-            //         event::wayland::Event::SelectionOffer(_) => None,
-            //         event::wayland::Event::Frame(_, _, _) => None,
-            //         event::wayland::Event::InputMethod(_) => None,
-            //         event::wayland::Event::InputMethodKeyboard(ke) => {
-            //             match ke {
-            //                 InputMethodKeyboardEvent::Press(ke) => {
-            //                     Some(Message::KeyPressed(ke))
-            //                 }
-            //                 InputMethodKeyboardEvent::Release(_) => None,
-            //                 InputMethodKeyboardEvent::Repeat(_) => None,
-            //                 InputMethodKeyboardEvent::Modifiers(_) => None,
-            //             }
-            //         }
-            //     },
-            //     event::PlatformSpecific::MacOS(_) => None,
             _ => None,
-            // },
-            // (Event::PlatformSpecific(ps), event::Status::Captured) => None,
         })
     }
 

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData, sync::Mutex};
+use std::{fmt::Debug, marker::PhantomData};
 
 use iced_futures::core::event::wayland::KeyEvent;
 use sctk::reexports::client::{
@@ -15,9 +15,10 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
 };
 
 use sctk::globals::GlobalData;
-use xkbcommon::xkb;
 
 use crate::event_loop::state::SctkState;
+
+use super::input_method::keyboard::RawModifiers;
 
 #[derive(Debug)]
 pub struct VirtualKeyboardManager<T> {
@@ -25,14 +26,7 @@ pub struct VirtualKeyboardManager<T> {
     _phantom: PhantomData<T>,
 }
 
-pub struct VirtualKeyboard {
-    xkb_state: Mutex<Option<xkb::State>>,
-}
-
-// SAFETY: The state does not share state with any other rust types.
-unsafe impl Send for VirtualKeyboard {}
-// SAFETY: The state is guarded by a mutex since libxkbcommon has no internal synchronization.
-unsafe impl Sync for VirtualKeyboard {}
+pub struct VirtualKeyboard {}
 
 impl<T: 'static> VirtualKeyboardManager<T> {
     pub fn new(
@@ -51,9 +45,7 @@ impl<T: 'static> VirtualKeyboardManager<T> {
         seat: &WlSeat,
         queue_handle: &QueueHandle<SctkState<T>>,
     ) -> ZwpVirtualKeyboardV1 {
-        let data = VirtualKeyboard {
-            xkb_state: Mutex::new(None),
-        };
+        let data = VirtualKeyboard {};
         self.manager
             .create_virtual_keyboard(seat, queue_handle, data)
     }
@@ -118,12 +110,15 @@ where
         }
     }
 
-    // pub fn update_modifiers(&mut self, modifiers: Modifiers){
-    //     let seat = self.seats.first().expect("seat not present"); //TODO: Handle this better
-    //     xkb::State::serialize_mods(, )
-    //     if let Some(vk) = seat.virtual_keyboard.as_ref() {
-    //         let xkb_state = vk.data()
-    //         vk.modifiers(, , , );
-    //     }
-    // }
+    pub fn update_modifiers(&mut self, modifiers: RawModifiers) {
+        let seat = self.seats.first().expect("seat not present"); //TODO: Handle this better
+        if let Some(vk) = seat.virtual_keyboard.as_ref() {
+            vk.modifiers(
+                modifiers.mods_depressed,
+                modifiers.mods_latched,
+                modifiers.mods_locked,
+                modifiers.group,
+            );
+        }
+    }
 }

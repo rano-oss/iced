@@ -19,7 +19,9 @@ use crate::{
     },
     sctk_event::{
         DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant,
-        PopupEventVariant, SctkEvent, StartCause, WindowEventVariant,
+        PopupEventVariant, SctkEvent, StartCause, WindowEventVariant, 
+        SelectionOfferEvent, StartCause,
+        WindowEventVariant, InputMethodPopupEventVariant,
     },
     settings,
 };
@@ -220,6 +222,7 @@ where
                 layer_surfaces: Vec::new(),
                 popups: Vec::new(),
                 lock_surfaces: Vec::new(),
+                input_method_popup: None,
                 dnd_source: None,
                 _kbd_focus: None,
                 sctk_events: Vec::new(),
@@ -474,6 +477,7 @@ where
                         variant: PopupEventVariant::ScaleFactorChanged(..),
                         ..
                     }
+                    | SctkEvent::InputMethodPopupEvent { variant: InputMethodPopupEventVariant::ScaleFactorChanged(..), ..}
                     | SctkEvent::WindowEvent {
                         variant: WindowEventVariant::ScaleFactorChanged(..),
                         ..
@@ -792,7 +796,8 @@ where
                             sticky_exit_callback(
                                 IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
                                     variant: WindowEventVariant::Created(object_id.clone(), id),
-                                    id: wl_surface.clone() }),
+                                    id: wl_surface.clone() 
+                                }),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
@@ -962,7 +967,8 @@ where
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
                                         variant: crate::sctk_event::PopupEventVariant::Created(object_id.clone(), id),
-                                        toplevel_id, parent_id, id: wl_surface.clone() }),
+                                        toplevel_id, parent_id, id: wl_surface.clone() 
+                                    }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,
@@ -1334,8 +1340,51 @@ where
                     Event::VirtualKeyboard(action) => {
                         match action.inner {
                             platform_specific::wayland::virtual_keyboard::ActionInner::KeyPressed(key_event) => self.state.press_key(key_event),
+                            platform_specific::wayland::virtual_keyboard::ActionInner::KeyReleased(key_event) => self.state.release_key(key_event),
+                            platform_specific::wayland::virtual_keyboard::ActionInner::Modifiers(raw_modifiers) => self.state.update_modifiers(raw_modifiers.into()),
                         }
                     },
+                    Event::InputMethod(action) => {
+                        match action.inner {
+                            platform_specific::wayland::input_method::ActionInner::Commit(serial) => self.state.commit(serial),
+                            platform_specific::wayland::input_method::ActionInner::CommitString(string) => self.state.commit_string(string),
+                            platform_specific::wayland::input_method::ActionInner::SetPreeditString { string, cursor_begin, cursor_end } => 
+                                self.state.set_preedit_string(string, cursor_begin, cursor_end),
+                            platform_specific::wayland::input_method::ActionInner::DeleteSurroundingText { before_length, after_length } => 
+                                self.state.delete_surrounding_text(before_length, after_length),
+                        }
+                    },
+                    Event::InputMethodPopup(action) => {
+                        match action {
+                            platform_specific::wayland::input_method_popup::Action::Popup { settings, _phantom } => {
+                                let (id, wl_surface) = self.state.get_input_method_popup(settings);
+                                let object_id = wl_surface.id();
+                                sticky_exit_callback(
+                                    IcedSctkEvent::SctkEvent(SctkEvent::InputMethodPopupEvent { 
+                                        variant: InputMethodPopupEventVariant::Created(object_id.clone(), id),
+                                        id: wl_surface.clone() 
+                                    }),
+                                    &self.state,
+                                    &mut control_flow,
+                                    &mut callback,
+                                );
+                            },
+                            platform_specific::wayland::input_method_popup::Action::ShowPopup => self.state.show_input_method_popup(),
+                            platform_specific::wayland::input_method_popup::Action::HidePopup => self.state.hide_input_method_popup(),
+                            platform_specific::wayland::input_method_popup::Action::Size { id:_, width, height } => {
+                                if let Some(input_method_popup) = &self.state.input_method_popup {
+                                    pending_redraws.push(input_method_popup.wl_surface.id());
+                                    sticky_exit_callback(IcedSctkEvent::SctkEvent(SctkEvent::InputMethodPopupEvent { 
+                                        variant: InputMethodPopupEventVariant::Size(width,height), id: input_method_popup.wl_surface.clone() 
+                                    }),
+                                        &self.state,
+                                        &mut control_flow,
+                                        &mut callback,
+                                    );
+                                }
+                            },
+                        }
+                    }
                 }
             }
 

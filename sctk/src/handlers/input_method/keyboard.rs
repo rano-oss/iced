@@ -243,6 +243,7 @@ pub trait InputMethodKeyboardHandler: Sized {
         keyboard: &ZwpInputMethodKeyboardGrabV2,
         serial: u32,
         modifiers: Modifiers,
+        raw_modifiers: RawModifiers,
     );
 
     /// The keyboard has updated the rate and delay between repeating key inputs.
@@ -718,6 +719,12 @@ where
                 mods_locked,
                 group,
             } => {
+                let raw_modifiers = RawModifiers {
+                    mods_depressed,
+                    mods_latched,
+                    mods_locked,
+                    group,
+                };
                 let mut guard = udata.xkb_state.lock().unwrap();
 
                 let state = match guard.as_mut() {
@@ -780,7 +787,14 @@ where
 
                 // Always issue the modifiers update for the user.
                 let modifiers = udata.update_modifiers();
-                data.update_modifiers(conn, qh, keyboard, serial, modifiers);
+                data.update_modifiers(
+                    conn,
+                    qh,
+                    keyboard,
+                    serial,
+                    modifiers,
+                    raw_modifiers,
+                );
             }
 
             zwp_input_method_keyboard_grab_v2::Event::RepeatInfo {
@@ -808,6 +822,36 @@ where
             }
 
             _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RawModifiers {
+    pub mods_depressed: u32,
+    pub mods_latched: u32,
+    pub mods_locked: u32,
+    pub group: u32,
+}
+
+impl From<iced_futures::core::event::wayland::RawModifiers> for RawModifiers {
+    fn from(value: iced_futures::core::event::wayland::RawModifiers) -> Self {
+        RawModifiers {
+            mods_depressed: value.mods_depressed,
+            mods_latched: value.mods_latched,
+            mods_locked: value.mods_locked,
+            group: value.group,
+        }
+    }
+}
+
+impl From<RawModifiers> for iced_futures::core::event::wayland::RawModifiers {
+    fn from(value: RawModifiers) -> Self {
+        iced_futures::core::event::wayland::RawModifiers {
+            mods_depressed: value.mods_depressed,
+            mods_latched: value.mods_latched,
+            mods_locked: value.mods_locked,
+            group: value.group,
         }
     }
 }

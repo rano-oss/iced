@@ -3,6 +3,7 @@
 pub mod activation;
 pub mod data_device;
 pub mod layer_surface;
+pub mod input_method;
 pub mod popup;
 pub mod session_lock;
 pub mod virtual_keyboard;
