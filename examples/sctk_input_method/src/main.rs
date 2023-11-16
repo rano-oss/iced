@@ -1,3 +1,4 @@
+use env_logger::fmt::Style;
 use iced::{
     event::{
         self,
@@ -6,11 +7,11 @@ use iced::{
     subscription,
     wayland::{
         actions::{virtual_keyboard::ActionInner, input_method_popup::InputMethodPopupSettings},
-        virtual_keyboard::virtual_keyboard_action, InitialSurface, input_method::{show_input_method_popup, get_input_method_popup},
+        virtual_keyboard::virtual_keyboard_action, InitialSurface, input_method::{show_input_method_popup, hide_input_method_popup},
     },
-    widget::{container, Container, Row, Column, Text},
+    widget::{container, Container, Row, Column, Text, Button, button, row, text, column},
     window, Application, Color, Command, Element, Event, Subscription, Theme,
-    Settings, alignment::{Vertical, Horizontal}, Length,
+    Settings, alignment::{Vertical, Horizontal}, Length, Alignment, Padding,
 };
 use iced_style::application;
 use std::fmt::Debug;
@@ -33,7 +34,8 @@ pub enum Message {
     Deactivate,
     KeyPressed(KeyEvent),
     KeyReleased(KeyEvent),
-    Modifiers(Modifiers, RawModifiers)
+    Modifiers(Modifiers, RawModifiers),
+    Done,
 }
 
 impl Application for InputMethod {
@@ -52,31 +54,29 @@ impl Application for InputMethod {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            Message::Activate => Command::none(),
-            Message::Deactivate => Command::none(),
+            Message::Activate => show_input_method_popup(),
+            Message::Deactivate => hide_input_method_popup(),
             Message::KeyPressed(key) => {
-                // get_input_method_popup(InputMethodPopupSettings::default());
-                show_input_method_popup()
-                // virtual_keyboard_action(ActionInner::KeyPressed(key))
+                virtual_keyboard_action(ActionInner::KeyPressed(key))
             },
             Message::KeyReleased(key) => virtual_keyboard_action(ActionInner::KeyReleased(key)),
             Message::Modifiers(_, raw_modifiers) => virtual_keyboard_action(ActionInner::Modifiers(raw_modifiers)),
+            Message::Done => Command::none(),
         }
     }
 
     fn view(&self, _id: window::Id) -> Element<Message> {
-        let row = Row::new().push(
-            Text::new("Hello World!")
-                .width(Length::Fill)
-                .horizontal_alignment(Horizontal::Center),
-        );
-        let column = Column::new().push(row);
-        let content: Element<_> = column.into();
-        Container::new(content)
-        .height(Length::Fill)
-        .width(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center)
+        let characters = vec!["我".to_string(), "的".to_string(), "名".to_string()];
+        container(
+            row(vec![
+                column(
+                    characters.iter().map(|c| text(c.clone()).into()).collect()
+                ).align_items(Alignment::Center).push(button("button").on_press(Message::Deactivate)).into(),
+                column(characters.iter().map(|c| text(c.clone()).into()).collect()
+                ).align_items(Alignment::Center).into()
+            ]).padding(Padding::new(2.0))
+        )
+        .style(<iced_style::Theme as container::StyleSheet>::Style::Custom(Box::new(CustomTheme)))
         .into()
     }
 
@@ -88,15 +88,12 @@ impl Application for InputMethod {
                 )),
                 _,
             ) => match event{
-                InputMethodEvent::Activate => {
-                    // dbg!("activate");
-                    Some(Message::Activate)
-                }
+                InputMethodEvent::Activate => Some(Message::Activate),
                 InputMethodEvent::Deactivate => Some(Message::Deactivate),
                 InputMethodEvent::SurroundingText { text, cursor, anchor } => None,
                 InputMethodEvent::TextChangeCause(_) => None,
                 InputMethodEvent::ContentType(_, _) => None,
-                InputMethodEvent::Done => None,
+                InputMethodEvent::Done => Some(Message::Done),
             },
             (
                 Event::PlatformSpecific(event::PlatformSpecific::Wayland(
@@ -104,10 +101,7 @@ impl Application for InputMethod {
                 )),
                 _,
             ) => match event {
-                InputMethodKeyboardEvent::Press(key) => {
-                    // dbg!(&key);
-                    Some(Message::KeyPressed(key))
-                }
+                InputMethodKeyboardEvent::Press(key) =>Some(Message::KeyPressed(key)),
                 InputMethodKeyboardEvent::Release(key) => Some(Message::KeyReleased(key)),
                 InputMethodKeyboardEvent::Repeat(key) => Some(Message::KeyPressed(key)),
                 InputMethodKeyboardEvent::Modifiers(modifiers, raw_modifiers) => 
@@ -119,5 +113,39 @@ impl Application for InputMethod {
 
     fn close_requested(&self, _id: window::Id) -> Message {
         unimplemented!()
+    }
+
+    fn style(&self) -> <Self::Theme as application::StyleSheet>::Style {
+        <Self::Theme as application::StyleSheet>::Style::Custom(Box::new(
+            CustomTheme,
+        ))
+    }
+}
+
+pub struct CustomTheme;
+
+impl container::StyleSheet for CustomTheme {
+    type Style = iced::Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            border_color: Color::from_rgb(1.0, 1.0, 0.0),
+            border_radius: 2.5.into(),
+            border_width: 5.0,
+            background: Some(Color::from_rgb(1.0, 1.0, 0.0).into()),
+            ..container::Appearance::default()
+        }
+    }
+}
+
+impl iced_style::application::StyleSheet for CustomTheme {
+    type Style = iced::Theme;
+
+    fn appearance(&self, _style: &Self::Style) -> application::Appearance {
+        iced_style::application::Appearance {
+            background_color: Color::from_rgba(0.0, 0.0, 0.0, 0.0),
+            icon_color: Color::BLACK,
+            text_color: Color::BLACK,
+        }
     }
 }
