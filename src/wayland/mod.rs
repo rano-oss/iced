@@ -6,7 +6,7 @@ pub mod sandbox;
 pub use crate::runtime::command::platform_specific::wayland as actions;
 pub use crate::style::application::{Appearance, StyleSheet};
 use iced_renderer::graphics::Antialiasing;
-pub use iced_sctk::{application::SurfaceIdWrapper, commands::*, settings::*};
+pub use iced_sctk::{application::SurfaceIdWrapper, commands::*};
 
 /// A pure version of [`Application`].
 ///

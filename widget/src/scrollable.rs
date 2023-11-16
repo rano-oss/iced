@@ -1,4 +1,7 @@
 //! Navigate an endless amount of content with a scrollbar.
+
+#[cfg(feature = "a11y")]
+use std::borrow::Cow;
 use iced_runtime::core::widget::Id;
 
 use crate::core::event::{self, Event};

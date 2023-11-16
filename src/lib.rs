@@ -300,12 +300,12 @@ pub mod widget {
     pub use iced_widget::*;
 
     // We hide the re-exported modules by `iced_widget`
-    mod core {}
-    mod graphics {}
-    mod native {}
-    mod renderer {}
-    mod style {}
-    mod runtime {}
+    // mod core {}
+    // mod graphics {}
+    // mod native {}
+    // mod renderer {}
+    // mod style {}
+    // mod runtime {}
 }
 
 #[cfg(feature = "winit")]
