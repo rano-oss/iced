@@ -20,8 +20,7 @@ use crate::{
     sctk_event::{
         DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant,
         PopupEventVariant, SctkEvent, StartCause, WindowEventVariant, 
-        SelectionOfferEvent, StartCause,
-        WindowEventVariant, InputMethodPopupEventVariant,
+        InputMethodPopupEventVariant,
     },
     settings,
 };

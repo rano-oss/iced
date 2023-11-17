@@ -8,7 +8,6 @@ use sctk::reexports::client::{
     Connection, Dispatch, Proxy, QueueHandle,
 };
 
-use sctk::seat::keyboard::Modifiers;
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
