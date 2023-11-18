@@ -506,10 +506,8 @@ impl SctkEvent {
                 .into_iter()
                 .collect(), // TODO Ashley: conversion
             },
-            // TODO: Not really handled here anyway
             SctkEvent::InputMethodEvent {
                 variant,
-                // input_method_id,
             } => match variant {
                 InputMethodEventVariant::Activate => {
                     vec![iced_runtime::core::Event::PlatformSpecific(

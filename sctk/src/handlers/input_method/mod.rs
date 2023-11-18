@@ -294,13 +294,19 @@ where
     pub fn show_input_method_popup(&mut self) {
         let seat = self.seats.first().expect("seat not present");
         let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
-        popup_state.popup_role = seat.input_method.as_ref().map(|im| {
-            im.get_input_popup_surface(&popup_state.wl_surface, &self.queue_handle, popup_state.clone())
-        });
+        if popup_state.popup_role.is_none() {
+            popup_state.popup_role = seat.input_method.as_ref().map(|im| {
+                im.get_input_popup_surface(&popup_state.wl_surface, &self.queue_handle, popup_state.clone())
+            });
+        }
     }
 
     pub fn hide_input_method_popup(&mut self) {
         let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
-        popup_state.popup_role = None;
+        if let Some(role) = &popup_state.popup_role {
+            role.destroy();
+            popup_state.popup_role = None;
+
+        }
     }
 }

@@ -1337,7 +1337,7 @@ where
                                     Some(cache) => cache,
                                     None => user_interface::Cache::default(),
                                 };
-
+                            
                             // Update application
                             update::<A, E, C>(
                                 &mut application,
@@ -1456,7 +1456,7 @@ where
                     }
                     redraw_pending = false;
                 }
-
+                
                 sctk_events.clear();
                 // clear the destroyed surfaces after they have been handled
                 destroyed_surface_ids.clear();
@@ -2454,7 +2454,7 @@ fn event_is_for_surface(
         }
         SctkEvent::SessionUnlocked => false,
         SctkEvent::InputMethodEvent { .. } => false,
-        SctkEvent::InputMethodKeyboardEvent { .. } => false,
-        SctkEvent::InputMethodPopupEvent { variant:_, id } => &id.id() == object_id, // TODO: what does this do?
+        SctkEvent::InputMethodKeyboardEvent { .. } => true,
+        SctkEvent::InputMethodPopupEvent { variant:_, id } => &id.id() == object_id
     }
 }
