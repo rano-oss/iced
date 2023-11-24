@@ -1,17 +1,26 @@
 use env_logger::fmt::Style;
 use iced::{
+    alignment::{Horizontal, Vertical},
     event::{
         self,
-        wayland::{InputMethodEvent, InputMethodKeyboardEvent, KeyEvent, RawModifiers, Modifiers},
+        wayland::{
+            InputMethodEvent, InputMethodKeyboardEvent, KeyEvent, Modifiers,
+            RawModifiers,
+        },
     },
     subscription,
     wayland::{
-        actions::{virtual_keyboard::ActionInner, input_method_popup::InputMethodPopupSettings},
-        virtual_keyboard::virtual_keyboard_action, InitialSurface, input_method::{show_input_method_popup, hide_input_method_popup},
+        actions::{
+            input_method_popup::InputMethodPopupSettings,
+            virtual_keyboard::ActionInner,
+        },
+        input_method::{hide_input_method_popup, show_input_method_popup},
+        virtual_keyboard::virtual_keyboard_action,
+        InitialSurface,
     },
-    widget::{container, button, row, text, column, combo_box},
-    window, Application, Color, Command, Element, Event, Subscription, Theme,
-    Settings, alignment::{Vertical, Horizontal}, Length, Alignment, Padding,
+    widget::{button, column, combo_box, container, row, text},
+    window, Alignment, Application, Color, Command, Element, Event, Length,
+    Padding, Settings, Subscription, Theme,
 };
 use iced_style::application;
 use std::fmt::Debug;
@@ -58,25 +67,50 @@ impl Application for InputMethod {
             Message::Deactivate => hide_input_method_popup(),
             Message::KeyPressed(key) => {
                 virtual_keyboard_action(ActionInner::KeyPressed(key))
-            },
-            Message::KeyReleased(key) => virtual_keyboard_action(ActionInner::KeyReleased(key)),
-            Message::Modifiers(_, raw_modifiers) => virtual_keyboard_action(ActionInner::Modifiers(raw_modifiers)),
+            }
+            Message::KeyReleased(key) => {
+                virtual_keyboard_action(ActionInner::KeyReleased(key))
+            }
+            Message::Modifiers(_, raw_modifiers) => {
+                virtual_keyboard_action(ActionInner::Modifiers(raw_modifiers))
+            }
             Message::Done => Command::none(),
         }
     }
 
     fn view(&self, _id: window::Id) -> Element<Message> {
-        let characters = vec!["我".to_string(), "的".to_string(), "名".to_string()];
+        let characters =
+            vec!["我".to_string(), "的".to_string(), "名".to_string()];
+
         container(
             row(vec![
                 column(
-                    characters.iter().map(|c| text(c.clone()).into()).collect()
-                ).align_items(Alignment::Center).push(button("button").on_press(Message::Deactivate)).into(),
-                column(characters.iter().map(|c| text(c.clone()).into()).collect()
-                ).align_items(Alignment::Center).into()
-            ]).padding(Padding::new(2.0))
+                    characters
+                        .iter()
+                        .enumerate()
+                        .map(|c| {
+                            container(row(vec![
+                                text(c.0).into(),
+                                text(c.1.clone()).into(),
+                            ]))
+                            .into()
+                        })
+                        .collect(),
+                )
+                .align_items(Alignment::Center)
+                .push(button("button").on_press(Message::Deactivate))
+                .into(),
+                column(
+                    characters.iter().map(|c| text(c.clone()).into()).collect(),
+                )
+                .align_items(Alignment::Center)
+                .into(),
+            ])
+            .padding(Padding::new(2.0)),
         )
-        .style(<iced_style::Theme as container::StyleSheet>::Style::Custom(Box::new(CustomTheme)))
+        .style(<iced_style::Theme as container::StyleSheet>::Style::Custom(
+            Box::new(CustomTheme),
+        ))
         .into()
     }
 
@@ -87,10 +121,14 @@ impl Application for InputMethod {
                     event::wayland::Event::InputMethod(event),
                 )),
                 _,
-            ) => match event{
+            ) => match event {
                 InputMethodEvent::Activate => Some(Message::Activate),
                 InputMethodEvent::Deactivate => Some(Message::Deactivate),
-                InputMethodEvent::SurroundingText { text, cursor, anchor } => None,
+                InputMethodEvent::SurroundingText {
+                    text,
+                    cursor,
+                    anchor,
+                } => None,
                 InputMethodEvent::TextChangeCause(_) => None,
                 InputMethodEvent::ContentType(_, _) => None,
                 InputMethodEvent::Done => Some(Message::Done),
@@ -101,12 +139,20 @@ impl Application for InputMethod {
                 )),
                 _,
             ) => match event {
-                InputMethodKeyboardEvent::Press(key) =>Some(Message::KeyPressed(key)),
-                InputMethodKeyboardEvent::Release(key) => Some(Message::KeyReleased(key)),
-                InputMethodKeyboardEvent::Repeat(key) => Some(Message::KeyPressed(key)),
-                InputMethodKeyboardEvent::Modifiers(modifiers, raw_modifiers) => 
-                    Some(Message::Modifiers(modifiers, raw_modifiers)),
-            }
+                InputMethodKeyboardEvent::Press(key) => {
+                    Some(Message::KeyPressed(key))
+                }
+                InputMethodKeyboardEvent::Release(key) => {
+                    Some(Message::KeyReleased(key))
+                }
+                InputMethodKeyboardEvent::Repeat(key) => {
+                    Some(Message::KeyPressed(key))
+                }
+                InputMethodKeyboardEvent::Modifiers(
+                    modifiers,
+                    raw_modifiers,
+                ) => Some(Message::Modifiers(modifiers, raw_modifiers)),
+            },
             _ => None,
         })
     }
