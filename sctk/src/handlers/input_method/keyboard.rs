@@ -268,12 +268,11 @@ pub trait InputMethodKeyboardHandler: Sized {
     /// This is called after the default handler for keymap changes and does nothing by default.
     fn update_keymap(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _keyboard: &ZwpInputMethodKeyboardGrabV2,
-        _keymap: Keymap<'_>,
-    ) {
-    }
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        keyboard: &ZwpInputMethodKeyboardGrabV2,
+        keymap: Keymap<'_>,
+    );
 }
 
 pub struct InputMethodKeyboardData<T> {

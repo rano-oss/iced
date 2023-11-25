@@ -13,7 +13,7 @@ use crate::{
         KeyboardEventVariant, LayerSurfaceEventVariant, PopupEventVariant,
         SctkEvent, StartCause, InputMethodEventVariant,
     },
-    settings,
+    settings, conversion::keysym_to_vkey,
 };
 use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
@@ -576,40 +576,46 @@ where
                     SctkEvent::InputMethodKeyboardEvent { variant } =>
                     match variant {
                         InputMethodKeyboardEventVariant::Press(ke) => {
-                            runtime.broadcast(
-                                iced_runtime::core::Event::PlatformSpecific(
-                                    PlatformSpecific::Wayland(
-                                        wayland::Event::InputMethodKeyboard(
-                                            wayland::InputMethodKeyboardEvent::Press(ke.into())
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code)
+                                            )
                                         )
-                                    )
-                                ),
-                                Status::Ignored
-                            )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
                         }
                         InputMethodKeyboardEventVariant::Release(ke) => {
-                            runtime.broadcast(
-                                iced_runtime::core::Event::PlatformSpecific(
-                                    PlatformSpecific::Wayland(
-                                        wayland::Event::InputMethodKeyboard(
-                                            wayland::InputMethodKeyboardEvent::Release(ke.into())
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code)
+                                            )
                                         )
-                                    )
-                                ),
-                                Status::Ignored
-                            )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
                         }
                         InputMethodKeyboardEventVariant::Repeat(ke) => {
-                            runtime.broadcast(
-                                iced_runtime::core::Event::PlatformSpecific(
-                                    PlatformSpecific::Wayland(
-                                        wayland::Event::InputMethodKeyboard(
-                                            wayland::InputMethodKeyboardEvent::Repeat(ke.into())
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code)
+                                            )
                                         )
-                                    )
-                                ),
-                                Status::Ignored
-                            )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
                         }
                         InputMethodKeyboardEventVariant::Modifiers(modifiers, raw_modifiers) => {
                             runtime.broadcast(

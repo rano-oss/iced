@@ -1,11 +1,14 @@
 use sctk::{
-    seat::keyboard::Keysym, 
     reexports::{
-        client::WEnum, protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
-            ChangeCause, ContentHint, ContentPurpose
-        }
-    }
+        client::WEnum,
+        protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
+            ChangeCause, ContentHint, ContentPurpose,
+        },
+    },
+    seat::keyboard::Keysym,
 };
+
+use crate::keyboard::KeyCode;
 
 /// input method events
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,12 +19,12 @@ pub enum InputMethodEvent {
     Deactivate,
     /// The surrounding plain text around the cursor, excluding the preedit text
     SurroundingText {
-        /// plain text 
-        text: String, 
+        /// plain text
+        text: String,
         /// Cursor position
-        cursor: u32, 
+        cursor: u32,
         /// Anchor position
-        anchor: u32 
+        anchor: u32,
     },
     /// indicates the cause of surrounding text change
     TextChangeCause(WEnum<ChangeCause>),
@@ -31,23 +34,15 @@ pub enum InputMethodEvent {
     Done,
 }
 
-
-// /// Input method keyboard events
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub enum InputMethodPopupEvent {
-//     /// An input method popup is created
-//     Created
-// }
-
 /// Input method keyboard events
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMethodKeyboardEvent {
     /// A key is pressed
-    Press(KeyEvent),
+    Press(KeyEvent, KeyCode),
     /// A key is released
-    Release(KeyEvent),
+    Release(KeyEvent, KeyCode),
     /// A key is repeated
-    Repeat(KeyEvent),
+    Repeat(KeyEvent, KeyCode),
     /// Modifiers are updated
     Modifiers(Modifiers, RawModifiers),
 }

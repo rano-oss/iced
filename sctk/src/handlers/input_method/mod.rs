@@ -1,11 +1,14 @@
 pub mod keyboard;
 use std::fmt::Debug;
+use std::io::Write;
 use std::marker::PhantomData;
+use std::os::fd::AsFd;
 
 use iced_runtime::command::platform_specific::wayland::input_method_popup::InputMethodPopupSettings;
 use iced_runtime::window;
 use sctk::reexports::calloop::LoopHandle;
 use sctk::reexports::client::globals::{BindError, GlobalList};
+use sctk::reexports::client::protocol::wl_keyboard::KeymapFormat;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::Dispatch;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
@@ -230,6 +233,24 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
                 modifiers,
                 raw_modifiers,
             ),
+        });
+    }
+
+    fn update_keymap(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &ZwpInputMethodKeyboardGrabV2,
+        keymap: keyboard::Keymap<'_>,
+    ) {
+        self.seats.iter().for_each(|seat|{
+            if let Some(vk) = &seat.virtual_keyboard {
+                let mut file = tempfile::tempfile().expect("tempfile cannot be set");
+                let keymap = keymap.as_string(); 
+                file.write_all(keymap.as_bytes()).expect("Tempfile not writeable");
+                file.flush().expect("Tempfile not flushable");
+                vk.keymap(KeymapFormat::XkbV1.into(), file.as_fd(), keymap.len() as u32);
+            }
         });
     }
 }
