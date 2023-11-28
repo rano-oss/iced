@@ -11,16 +11,15 @@ use crate::{
     conversion,
     dpi::LogicalSize,
     handlers::{
-        activation::IcedRequestData,
-        input_method::InputMethodManager,
+        activation::IcedRequestData, input_method::InputMethodManager,
         virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant,
-        PopupEventVariant, SctkEvent, StartCause, WindowEventVariant, 
-        InputMethodPopupEventVariant,
+        DndOfferEvent, IcedSctkEvent, InputMethodPopupEventVariant,
+        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
+        WindowEventVariant,
     },
     settings,
 };
@@ -476,7 +475,11 @@ where
                         variant: PopupEventVariant::ScaleFactorChanged(..),
                         ..
                     }
-                    | SctkEvent::InputMethodPopupEvent { variant: InputMethodPopupEventVariant::ScaleFactorChanged(..), ..}
+                    | SctkEvent::InputMethodPopupEvent {
+                        variant:
+                            InputMethodPopupEventVariant::ScaleFactorChanged(..),
+                        ..
+                    }
                     | SctkEvent::WindowEvent {
                         variant: WindowEventVariant::ScaleFactorChanged(..),
                         ..
@@ -1345,7 +1348,7 @@ where
                     },
                     Event::InputMethod(action) => {
                         match action.inner {
-                            platform_specific::wayland::input_method::ActionInner::Commit(serial) => self.state.commit(serial),
+                            platform_specific::wayland::input_method::ActionInner::Commit => self.state.commit(),
                             platform_specific::wayland::input_method::ActionInner::CommitString(string) => self.state.commit_string(string),
                             platform_specific::wayland::input_method::ActionInner::SetPreeditString { string, cursor_begin, cursor_end } => 
                                 self.state.set_preedit_string(string, cursor_begin, cursor_end),

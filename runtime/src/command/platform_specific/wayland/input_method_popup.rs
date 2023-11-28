@@ -1,8 +1,8 @@
-use std::{fmt, marker::PhantomData};
-use std::hash::{Hash, Hasher};
 use iced_core::layout::Limits;
 use iced_core::window::Id;
 use iced_futures::MaybeSend;
+use std::hash::{Hash, Hasher};
+use std::{fmt, marker::PhantomData};
 
 /// Popup creation details
 #[derive(Debug, Clone)]
@@ -49,7 +49,7 @@ pub enum Action<T> {
     /// hide input method popup
     HidePopup,
     /// Set size of the input method popup
-    Size { 
+    Size {
         /// id of the popup
         id: Id,
         /// width
@@ -69,29 +69,34 @@ impl<T> Action<T> {
         T: 'static,
     {
         match self {
-            Action::Popup { settings, _phantom } => 
-                Action::Popup {
-                    settings,
-                    _phantom: PhantomData,
-                },
+            Action::Popup { settings, _phantom } => Action::Popup {
+                settings,
+                _phantom: PhantomData,
+            },
             Action::ShowPopup => Action::ShowPopup,
             Action::HidePopup => Action::HidePopup,
-            Action::Size { id, width, height } => 
-                Action::Size { id, width, height },
+            Action::Size { id, width, height } => {
+                Action::Size { id, width, height }
+            }
         }
     }
 }
 
-
 impl<T> fmt::Debug for Action<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Popup { settings, _phantom } => 
-                f.debug_tuple("Show Input Method Popup").field(settings).finish(),
-            Self::ShowPopup => f.debug_tuple("Show Input Method Popup").finish(),
-            Self::HidePopup => f.debug_tuple("Hide Input Method Popup").finish(),
-            Self::Size { id, width, height } => 
-                f.debug_tuple("Input method popup size changed")
+            Self::Popup { settings, _phantom } => f
+                .debug_tuple("Show Input Method Popup")
+                .field(settings)
+                .finish(),
+            Self::ShowPopup => {
+                f.debug_tuple("Show Input Method Popup").finish()
+            }
+            Self::HidePopup => {
+                f.debug_tuple("Hide Input Method Popup").finish()
+            }
+            Self::Size { id, width, height } => f
+                .debug_tuple("Input method popup size changed")
                 .field(id)
                 .field(width)
                 .field(height)

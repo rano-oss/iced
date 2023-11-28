@@ -1,7 +1,6 @@
 use iced::widget::{
     column, combo_box, container, scrollable, text, vertical_space,
 };
-use iced::window::Id;
 use iced::{Alignment, Element, Length, Sandbox, Settings};
 
 pub fn main() -> iced::Result {
@@ -55,7 +54,7 @@ impl Sandbox for Example {
         }
     }
 
-    fn view(&self, _: Id) -> Element<Message> {
+    fn view(&self) -> Element<Message> {
         let combo_box = combo_box(
             &self.languages,
             "Type a language...",
@@ -82,10 +81,6 @@ impl Sandbox for Example {
             .center_x()
             .center_y()
             .into()
-    }
-
-    fn close_requested(&self, _id: Id) -> Message {
-        unimplemented!()
     }
 }
 

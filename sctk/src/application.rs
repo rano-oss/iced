@@ -2,18 +2,22 @@
 use crate::sctk_event::ActionRequestEvent;
 use crate::{
     clipboard::Clipboard,
-    commands::{layer_surface::get_layer_surface, window::get_window, input_method::get_input_method_popup},
+    commands::{
+        input_method::get_input_method_popup, layer_surface::get_layer_surface,
+        window::get_window,
+    },
+    conversion::keysym_to_vkey,
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
     error::{self, Error},
     event_loop::{
         control_flow::ControlFlow, proxy, state::SctkState, SctkEventLoop,
     },
     sctk_event::{
-        DataSourceEvent, IcedSctkEvent, InputMethodKeyboardEventVariant,
-        KeyboardEventVariant, LayerSurfaceEventVariant, PopupEventVariant,
-        SctkEvent, StartCause, InputMethodEventVariant,
+        DataSourceEvent, IcedSctkEvent, InputMethodEventVariant,
+        InputMethodKeyboardEventVariant, KeyboardEventVariant,
+        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
     },
-    settings, conversion::keysym_to_vkey,
+    settings,
 };
 use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
@@ -62,7 +66,7 @@ use iced_runtime::{
         self,
         platform_specific::{
             self,
-            wayland::{data_device::DndIcon, popup, input_method_popup},
+            wayland::{data_device::DndIcon, input_method_popup, popup},
         },
     },
     core::{mouse::Interaction, Color, Point, Renderer, Size},
@@ -86,7 +90,9 @@ pub enum Event<Message> {
     /// Input Method requests from client
     InputMethod(platform_specific::wayland::input_method::Action<Message>),
     /// Input Method Popup requests from client
-    InputMethodPopup(platform_specific::wayland::input_method_popup::Action<Message>),
+    InputMethodPopup(
+        platform_specific::wayland::input_method_popup::Action<Message>,
+    ),
     /// layer surface requests from the client
     LayerSurface(platform_specific::wayland::layer_surface::Action<Message>),
     /// window requests from the client
@@ -581,7 +587,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
@@ -595,7 +601,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
@@ -609,7 +615,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
@@ -1343,7 +1349,7 @@ where
                                     Some(cache) => cache,
                                     None => user_interface::Cache::default(),
                                 };
-                            
+
                             // Update application
                             update::<A, E, C>(
                                 &mut application,
@@ -1462,7 +1468,7 @@ where
                     }
                     redraw_pending = false;
                 }
-                
+
                 sctk_events.clear();
                 // clear the destroyed surfaces after they have been handled
                 destroyed_surface_ids.clear();
@@ -1794,7 +1800,7 @@ where
                             command::platform_specific::wayland::input_method_popup::Action::Size { id: inner, width: w, height: h },
                         )
                     );
-                },
+                }
             };
         }
 
@@ -2461,6 +2467,8 @@ fn event_is_for_surface(
         SctkEvent::SessionUnlocked => false,
         SctkEvent::InputMethodEvent { .. } => false,
         SctkEvent::InputMethodKeyboardEvent { .. } => true,
-        SctkEvent::InputMethodPopupEvent { variant:_, id } => &id.id() == object_id
+        SctkEvent::InputMethodPopupEvent { variant: _, id } => {
+            &id.id() == object_id
+        }
     }
 }

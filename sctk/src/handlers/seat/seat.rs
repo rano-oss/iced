@@ -46,13 +46,10 @@ where
                 .virtual_keyboard_manager
                 .as_ref()
                 .map(|vk| vk.virtual_keyboard(&seat, qh)),
-            input_method: self.input_method_manager.as_ref().map(|im| {
-                im.input_method(
-                    &seat, 
-                    qh, 
-                    self.loop_handle.clone(), 
-                )
-            }),
+            input_method: self
+                .input_method_manager
+                .as_ref()
+                .map(|im| im.input_method(&seat, qh, self.loop_handle.clone())),
         });
     }
 
@@ -86,11 +83,7 @@ where
                         .map(|vk| vk.virtual_keyboard(&seat.clone(), qh)),
                     input_method: self.input_method_manager.as_ref().map(
                         |im| {
-                            im.input_method(
-                                &seat,
-                                qh,
-                                self.loop_handle.clone(),
-                            )
+                            im.input_method(&seat, qh, self.loop_handle.clone())
                         },
                     ),
                 });
