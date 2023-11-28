@@ -1345,7 +1345,7 @@ where
                     },
                     Event::InputMethod(action) => {
                         match action.inner {
-                            platform_specific::wayland::input_method::ActionInner::Commit(serial) => self.state.commit(serial),
+                            platform_specific::wayland::input_method::ActionInner::Commit => self.state.commit(),
                             platform_specific::wayland::input_method::ActionInner::CommitString(string) => self.state.commit_string(string),
                             platform_specific::wayland::input_method::ActionInner::SetPreeditString { string, cursor_begin, cursor_end } => 
                                 self.state.set_preedit_string(string, cursor_begin, cursor_end),

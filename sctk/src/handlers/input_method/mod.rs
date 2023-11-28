@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::os::fd::AsFd;
+use std::sync::{Arc, Mutex};
 
 use iced_runtime::command::platform_specific::wayland::input_method_popup::InputMethodPopupSettings;
 use iced_runtime::window;
@@ -59,7 +60,9 @@ impl<T: 'static> InputMethodManager<T> {
         queue_handle: &QueueHandle<SctkState<T>>,
         loop_handle: LoopHandle<'static, SctkState<T>>,
     ) -> ZwpInputMethodV2 {
-        let mut data = InputMethod {};
+        let mut data = InputMethod {
+            inner: Arc::new(Mutex::new(Inner::default())),
+        };
         let im =
             self.manager
                 .get_input_method(seat, queue_handle, data.clone());
@@ -94,8 +97,15 @@ impl<T: 'static> Dispatch<ZwpInputMethodManagerV2, GlobalData, SctkState<T>>
     }
 }
 
+#[derive(Clone, Default)]
+struct Inner {
+    serial: u32,
+}
+
 #[derive(Clone)]
-pub struct InputMethod {}
+pub struct InputMethod {
+    inner: Arc<Mutex<Inner>>,
+}
 
 impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
     for InputMethodManager<T>
@@ -104,7 +114,7 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
         state: &mut SctkState<T>,
         _: &ZwpInputMethodV2,
         event: <ZwpInputMethodV2 as Proxy>::Event,
-        _: &InputMethod,
+        data: &InputMethod,
         _: &Connection,
         _: &QueueHandle<SctkState<T>>,
     ) {
@@ -141,6 +151,7 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
                 })
             }
             zwp_input_method_v2::Event::Done => {
+                data.inner.lock().unwrap().serial += 1;
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Done,
                 })
@@ -261,28 +272,29 @@ impl <T> SctkState<T>
 where 
     T: 'static + Debug,
 {
-    pub fn commit(&mut self, serial: u32) {
+    pub fn commit(&self) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
-            im.commit(serial)
+            let inner = im.data::<InputMethod>().unwrap().inner.lock().unwrap();
+            im.commit(inner.serial);
         }
     }
 
-    pub fn commit_string(&mut self, string: String) {
+    pub fn commit_string(&self, string: String) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
             im.commit_string(string)
         }
     }
     
-    pub fn set_preedit_string(&mut self, string: String, cursor_begin: i32, cursor_end: i32) {
+    pub fn set_preedit_string(&self, string: String, cursor_begin: i32, cursor_end: i32) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
             im.set_preedit_string(string, cursor_begin, cursor_end)
         }
     }
     
-    pub fn delete_surrounding_text(&mut self, before_length: u32, after_length: u32) {
+    pub fn delete_surrounding_text(&self, before_length: u32, after_length: u32) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
             im.delete_surrounding_text(before_length, after_length)

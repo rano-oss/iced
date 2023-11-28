@@ -29,7 +29,7 @@ impl<T> fmt::Debug for Action<T> {
 /// Input Method Actions
 pub enum ActionInner {
     /// Apply state
-    Commit(u32),
+    Commit,
     /// Send string to client
     CommitString(String),
     /// Set preedit string
@@ -66,7 +66,7 @@ impl<T> Action<T> {
 impl fmt::Debug for ActionInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Commit(serial) => f.debug_tuple("Commit").field(serial).finish(),
+            Self::Commit => f.debug_tuple("Commit").finish(),
             Self::CommitString(string) => f.debug_tuple("Commit String").field(string).finish(),
             Self::SetPreeditString { string, cursor_begin, cursor_end } => 
                 f.debug_tuple("Set Preedit String").field(string).field(cursor_begin).field(cursor_end).finish(),
