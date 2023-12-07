@@ -183,10 +183,10 @@ pub fn present<T: AsRef<str>>(
     surface
         .window
         .resize(
-            NonZeroU32::new(physical_size.width as u32)
-                .ok_or_else(|| compositor::SurfaceError::InvalidDimensions)?,
-            NonZeroU32::new(physical_size.height as u32)
-                .ok_or_else(|| compositor::SurfaceError::InvalidDimensions)?,
+            NonZeroU32::new(physical_size.width)
+                .ok_or(compositor::SurfaceError::InvalidDimensions)?,
+            NonZeroU32::new(physical_size.height)
+                .ok_or(compositor::SurfaceError::InvalidDimensions)?,
         )
         .map_err(|_| compositor::SurfaceError::Resize)?;
     if let Ok(mut b) = surface.window.buffer_mut() {

@@ -154,7 +154,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut state = program::State::new(
-        Id(0),
+        Id::MAIN,
         controls,
         viewport.logical_size(),
         &mut renderer,
@@ -199,7 +199,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !state.is_queue_empty() {
                     // We update iced
                     let _ = state.update(
-                        Id(0),
+                        Id::MAIN,
                         viewport.logical_size(),
                         cursor_position
                             .map(|p| {

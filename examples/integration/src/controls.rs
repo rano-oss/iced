@@ -46,7 +46,7 @@ impl Program for Controls {
         Command::none()
     }
 
-    fn view(&self, _: Id) -> Element<Message, Renderer<Theme>> {
+    fn view(&self) -> Element<Message, Renderer<Theme>> {
         let background_color = self.background_color;
         let text = &self.text;
 
