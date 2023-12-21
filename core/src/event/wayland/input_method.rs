@@ -38,11 +38,11 @@ pub enum InputMethodEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMethodKeyboardEvent {
     /// A key is pressed
-    Press(KeyEvent, KeyCode),
+    Press(KeyEvent, KeyCode, Modifiers),
     /// A key is released
-    Release(KeyEvent, KeyCode),
+    Release(KeyEvent, KeyCode, Modifiers),
     /// A key is repeated
-    Repeat(KeyEvent, KeyCode),
+    Repeat(KeyEvent, KeyCode, Modifiers),
     /// Modifiers are updated
     Modifiers(Modifiers, RawModifiers),
 }

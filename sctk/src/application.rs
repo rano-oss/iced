@@ -581,7 +581,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
@@ -595,7 +595,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
@@ -609,7 +609,7 @@ where
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code)
+                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code, mods.into())
                                             )
                                         )
                                     ),
