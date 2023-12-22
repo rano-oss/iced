@@ -7,7 +7,9 @@ use crate::core::mouse;
 use crate::core::renderer;
 use crate::core::widget;
 use crate::core::window;
-use crate::core::{Clipboard, Element, Layout, Point, Rectangle, Shell, Size};
+use crate::core::{
+    Clipboard, Element, Layout, Point, Rectangle, Shell, Size, Vector,
+};
 use crate::overlay;
 
 /// A set of interactive graphical elements with a specific [`Layout`].
@@ -97,8 +99,11 @@ where
         let Cache { mut state } = cache;
         state.diff(root.as_widget_mut());
 
-        let base =
-            renderer.layout(&root, &layout::Limits::new(Size::ZERO, bounds));
+        let base = root.as_widget().layout(
+            &mut state,
+            renderer,
+            &layout::Limits::new(Size::ZERO, bounds),
+        );
 
         UserInterface {
             root,
@@ -198,7 +203,8 @@ where
             let bounds = self.bounds;
 
             let mut overlay = manual_overlay.as_mut().unwrap();
-            let mut layout = overlay.layout(renderer, bounds, Point::ORIGIN);
+            let mut layout =
+                overlay.layout(renderer, bounds, Point::ORIGIN, Vector::ZERO);
             let mut event_statuses = Vec::new();
 
             for event in events.iter().cloned() {
@@ -228,8 +234,9 @@ where
                 if shell.is_layout_invalid() {
                     let _ = ManuallyDrop::into_inner(manual_overlay);
 
-                    self.base = renderer.layout(
-                        &self.root,
+                    self.base = self.root.as_widget().layout(
+                        &mut self.state,
+                        renderer,
                         &layout::Limits::new(Size::ZERO, self.bounds),
                     );
 
@@ -251,8 +258,12 @@ where
                     overlay = manual_overlay.as_mut().unwrap();
 
                     shell.revalidate_layout(|| {
-                        layout =
-                            overlay.layout(renderer, bounds, Point::ORIGIN);
+                        layout = overlay.layout(
+                            renderer,
+                            bounds,
+                            Point::ORIGIN,
+                            Vector::ZERO,
+                        );
                     });
                 }
 
@@ -327,8 +338,9 @@ where
                 }
 
                 shell.revalidate_layout(|| {
-                    self.base = renderer.layout(
-                        &self.root,
+                    self.base = self.root.as_widget().layout(
+                        &mut self.state,
+                        renderer,
                         &layout::Limits::new(Size::ZERO, self.bounds),
                     );
 
@@ -358,7 +370,7 @@ where
     /// It returns the current [`mouse::Interaction`]. You should update the
     /// icon of the mouse cursor accordingly in your system.
     ///
-    /// [`Renderer`]: crate::Renderer
+    /// [`Renderer`]: crate::core::Renderer
     ///
     /// # Example
     /// We can finally draw our [counter](index.html#usage) by
@@ -445,7 +457,12 @@ where
             .map(overlay::Nested::new)
         {
             let overlay_layout = self.overlay.take().unwrap_or_else(|| {
-                overlay.layout(renderer, self.bounds, Point::ORIGIN)
+                overlay.layout(
+                    renderer,
+                    self.bounds,
+                    Point::ORIGIN,
+                    Vector::ZERO,
+                )
             });
 
             let cursor = if cursor
@@ -563,8 +580,12 @@ where
             .map(overlay::Nested::new)
         {
             if self.overlay.is_none() {
-                self.overlay =
-                    Some(overlay.layout(renderer, self.bounds, Point::ORIGIN));
+                self.overlay = Some(overlay.layout(
+                    renderer,
+                    self.bounds,
+                    Point::ORIGIN,
+                    Vector::ZERO,
+                ));
             }
 
             overlay.operate(
@@ -591,12 +612,12 @@ where
     #[cfg(feature = "a11y")]
     pub fn a11y_nodes(
         &self,
-        cursor_position: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         self.root.as_widget().a11y_nodes(
             Layout::new(&self.base),
             &self.state,
-            cursor_position,
+            cursor,
         )
     }
 }
@@ -634,7 +655,7 @@ pub enum State {
     /// The [`UserInterface`] is up-to-date and can be reused without
     /// rebuilding.
     Updated {
-        /// The [`Instant`] when a redraw should be performed.
+        /// The [`window::RedrawRequest`] when a redraw should be performed.
         redraw_request: Option<window::RedrawRequest>,
     },
 }

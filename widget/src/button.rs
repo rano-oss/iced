@@ -20,6 +20,7 @@ use crate::core::{
 };
 use iced_renderer::core::widget::{operation, OperationOutputWrapper};
 
+use iced_renderer::core::widget::{operation, OperationOutputWrapper};
 pub use iced_style::button::{Appearance, StyleSheet};
 
 /// A generic widget that produces a message when pressed.
@@ -139,9 +140,50 @@ where
     /// Sets the style variant of this [`Button`].
     pub fn style(
         mut self,
-        style: <Renderer::Theme as StyleSheet>::Style,
+        style: impl Into<<Renderer::Theme as StyleSheet>::Style>,
     ) -> Self {
-        self.style = style;
+        self.style = style.into();
+        self
+    }
+
+    /// Sets the [`Id`] of the [`Button`].
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = id;
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the name of the [`Button`].
+    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description_widget<T: iced_accessibility::Describes>(
+        mut self,
+        description: &T,
+    ) -> Self {
+        self.description = Some(iced_accessibility::Description::Id(
+            description.description(),
+        ));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description(mut self, description: impl Into<Cow<'a, str>>) -> Self {
+        self.description =
+            Some(iced_accessibility::Description::Text(description.into()));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the label of the [`Button`].
+    pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
+        self.label =
+            Some(label.label().into_iter().map(|l| l.into()).collect());
         self
     }
 
@@ -220,19 +262,17 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        layout(
-            renderer,
-            limits,
-            self.width,
-            self.height,
-            self.padding,
-            |renderer, limits| {
-                self.content.as_widget().layout(renderer, limits)
-            },
-        )
+        layout(limits, self.width, self.height, self.padding, |limits| {
+            self.content.as_widget().layout(
+                &mut tree.children[0],
+                renderer,
+                limits,
+            )
+        })
     }
 
     fn operate(
@@ -639,17 +679,16 @@ where
 }
 
 /// Computes the layout of a [`Button`].
-pub fn layout<Renderer>(
-    renderer: &Renderer,
+pub fn layout(
     limits: &layout::Limits,
     width: Length,
     height: Length,
     padding: Padding,
-    layout_content: impl FnOnce(&Renderer, &layout::Limits) -> layout::Node,
+    layout_content: impl FnOnce(&layout::Limits) -> layout::Node,
 ) -> layout::Node {
     let limits = limits.width(width).height(height);
 
-    let mut content = layout_content(renderer, &limits.pad(padding));
+    let mut content = layout_content(&limits.pad(padding));
     let padding = padding.fit(content.size(), limits.max());
     let size = limits.pad(padding).resolve(content.size()).pad(padding);
 

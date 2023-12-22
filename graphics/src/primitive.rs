@@ -3,7 +3,9 @@ use crate::core::alignment;
 use crate::core::image;
 use crate::core::svg;
 use crate::core::text;
-use crate::core::{Background, Color, Font, Rectangle, Vector};
+use crate::core::{Background, Color, Font, Pixels, Point, Rectangle, Vector};
+use crate::text::editor;
+use crate::text::paragraph;
 
 use std::sync::Arc;
 
@@ -12,25 +14,51 @@ use std::sync::Arc;
 pub enum Primitive<T> {
     /// A text primitive
     Text {
-        /// The contents of the text
+        /// The contents of the text.
         content: String,
-        /// The bounds of the text
+        /// The bounds of the text.
         bounds: Rectangle,
-        /// The color of the text
+        /// The color of the text.
         color: Color,
-        /// The size of the text in logical pixels
-        size: f32,
-        /// The line height of the text
+        /// The size of the text in logical pixels.
+        size: Pixels,
+        /// The line height of the text.
         line_height: text::LineHeight,
-        /// The font of the text
+        /// The font of the text.
         font: Font,
-        /// The horizontal alignment of the text
+        /// The horizontal alignment of the text.
         horizontal_alignment: alignment::Horizontal,
-        /// The vertical alignment of the text
+        /// The vertical alignment of the text.
         vertical_alignment: alignment::Vertical,
         /// The shaping strategy of the text.
         shaping: text::Shaping,
+        /// The clip bounds of the text.
+        clip_bounds: Rectangle,
     },
+    /// A paragraph primitive
+    Paragraph {
+        /// The [`paragraph::Weak`] reference.
+        paragraph: paragraph::Weak,
+        /// The position of the paragraph.
+        position: Point,
+        /// The color of the paragraph.
+        color: Color,
+        /// The clip bounds of the paragraph.
+        clip_bounds: Rectangle,
+    },
+    /// An editor primitive
+    Editor {
+        /// The [`editor::Weak`] reference.
+        editor: editor::Weak,
+        /// The position of the editor.
+        position: Point,
+        /// The color of the editor.
+        color: Color,
+        /// The clip bounds of the editor.
+        clip_bounds: Rectangle,
+    },
+    /// A raw `cosmic-text` primitive
+    RawText(crate::text::Raw),
     /// A quad primitive
     Quad {
         /// The bounds of the quad
@@ -48,6 +76,8 @@ pub enum Primitive<T> {
     Image {
         /// The handle of the image
         handle: image::Handle,
+        /// The filter method of the image
+        filter_method: image::FilterMethod,
         /// The bounds of the image
         bounds: Rectangle,
         /// The border radii of the image

@@ -22,7 +22,10 @@ pub trait Compositor: Sized {
     fn new<W: HasRawWindowHandle + HasRawDisplayHandle>(
         settings: Self::Settings,
         compatible_window: Option<&W>,
-    ) -> Result<(Self, Self::Renderer), Error>;
+    ) -> Result<Self, Error>;
+
+    /// Creates a [`Self::Renderer`] for the [`Compositor`].
+    fn create_renderer(&self) -> Self::Renderer;
 
     /// Crates a new [`Surface`] for the given window.
     ///
@@ -61,9 +64,9 @@ pub trait Compositor: Sized {
     ) -> Result<(), SurfaceError>;
 
     /// Screenshots the current [`Renderer`] primitives to an offscreen texture, and returns the bytes of
-    /// the texture ordered as `RGBA` in the sRGB color space.
+    /// the texture ordered as `RGBA` in the `sRGB` color space.
     ///
-    /// [`Renderer`]: Self::Renderer;
+    /// [`Renderer`]: Self::Renderer
     fn screenshot<T: AsRef<str>>(
         &mut self,
         renderer: &mut Self::Renderer,

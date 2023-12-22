@@ -58,13 +58,7 @@ use std::{
 use wayland_backend::client::ObjectId;
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 
-use iced_graphics::{
-    compositor,
-    Compositor,
-    // window::{self, Compositor},
-    // Color, Point, Viewport,
-    Viewport,
-};
+use iced_graphics::{compositor, Compositor, Viewport};
 use iced_runtime::{
     clipboard,
     command::{
@@ -75,9 +69,10 @@ use iced_runtime::{
         },
     },
     core::{mouse::Interaction, Color, Point, Renderer, Size},
+    multi_window::Program,
     system, user_interface,
     window::Id as SurfaceId,
-    Command, Debug, Program, UserInterface,
+    Command, Debug, UserInterface,
 };
 use iced_style::application::{self, StyleSheet};
 use itertools::Itertools;
@@ -125,9 +120,31 @@ pub enum Event<Message> {
 
 pub struct IcedSctkState;
 
-/// An interactive, native cross-platform application.
+pub struct SurfaceDisplayWrapper<C: Compositor> {
+    comp_surface: Option<<C as Compositor>::Surface>,
+    backend: wayland_backend::client::Backend,
+    wl_surface: WlSurface,
+}
+
+unsafe impl<C: Compositor> HasRawDisplayHandle for SurfaceDisplayWrapper<C> {
+    fn raw_display_handle(&self) -> RawDisplayHandle {
+        let mut display_handle = WaylandDisplayHandle::empty();
+        display_handle.display = self.backend.display_ptr() as *mut _;
+        RawDisplayHandle::Wayland(display_handle)
+    }
+}
+
+unsafe impl<C: Compositor> HasRawWindowHandle for SurfaceDisplayWrapper<C> {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        let mut window_handle = WaylandWindowHandle::empty();
+        window_handle.surface = self.wl_surface.id().as_ptr() as *mut _;
+        RawWindowHandle::Wayland(window_handle)
+    }
+}
+
+/// An interactive, native, cross-platform, multi-windowed application.
 ///
-/// This trait is the main entrypoint of Iced. Once implemented, you can run
+/// This trait is the main entrypoint of multi-window Iced. Once implemented, you can run
 /// your GUI application by simply calling [`run`]. It will run in
 /// its own window.
 ///
@@ -157,12 +174,12 @@ where
     ///
     /// This title can be dynamic! The runtime will automatically update the
     /// title of your application when necessary.
-    fn title(&self) -> String;
+    fn title(&self, window: SurfaceId) -> String;
 
-    /// Returns the current [`Theme`] of the [`Application`].
-    fn theme(&self) -> <Self::Renderer as Renderer>::Theme;
+    /// Returns the current `Theme` of the [`Application`].
+    fn theme(&self, window: SurfaceId) -> <Self::Renderer as Renderer>::Theme;
 
-    /// Returns the [`Style`] variation of the [`Theme`].
+    /// Returns the `Style` variation of the `Theme`.
     fn style(
         &self,
     ) -> <<Self::Renderer as Renderer>::Theme as StyleSheet>::Style {
@@ -182,7 +199,7 @@ where
         Subscription::none()
     }
 
-    /// Returns the scale factor of the [`Application`].
+    /// Returns the scale factor of the window of the [`Application`].
     ///
     /// It can be used to dynamically control the size of the UI at runtime
     /// (i.e. zooming).
@@ -191,45 +208,9 @@ where
     /// while a scale factor of `0.5` will shrink them to half their size.
     ///
     /// By default, it returns `1.0`.
-    fn scale_factor(&self) -> f64 {
+    #[allow(unused_variables)]
+    fn scale_factor(&self, window: SurfaceId) -> f64 {
         1.0
-    }
-
-    /// Defines whether or not to use natural scrolling
-    fn natural_scroll(&self) -> bool {
-        false
-    }
-
-    /// Returns whether the [`Application`] should be terminated.
-    ///
-    /// By default, it returns `false`.
-    fn should_exit(&self) -> bool {
-        false
-    }
-
-    /// TODO
-    fn close_requested(&self, id: SurfaceId) -> Self::Message;
-}
-
-pub struct SurfaceDisplayWrapper<C: Compositor> {
-    comp_surface: Option<<C as Compositor>::Surface>,
-    backend: wayland_backend::client::Backend,
-    wl_surface: WlSurface,
-}
-
-unsafe impl<C: Compositor> HasRawDisplayHandle for SurfaceDisplayWrapper<C> {
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        let mut display_handle = WaylandDisplayHandle::empty();
-        display_handle.display = self.backend.display_ptr() as *mut _;
-        RawDisplayHandle::Wayland(display_handle)
-    }
-}
-
-unsafe impl<C: Compositor> HasRawWindowHandle for SurfaceDisplayWrapper<C> {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        let mut window_handle = WaylandWindowHandle::empty();
-        window_handle.surface = self.wl_surface.id().as_ptr() as *mut _;
-        RawWindowHandle::Wayland(window_handle)
     }
 }
 
@@ -244,12 +225,10 @@ where
     E: Executor + 'static,
     C: Compositor<Renderer = A::Renderer> + 'static,
     <A::Renderer as Renderer>::Theme: StyleSheet,
-    A::Flags: Clone,
 {
     let mut debug = Debug::new();
     debug.startup_started();
 
-    let flags = settings.flags.clone();
     let exit_on_close_request = settings.exit_on_close_request;
 
     let mut event_loop = SctkEventLoop::<A::Message>::new(&settings)
@@ -263,7 +242,7 @@ where
     };
 
     let (application, init_command) = {
-        let flags = flags;
+        let flags = settings.flags;
 
         runtime.enter(|| A::new(flags))
     };
@@ -274,10 +253,6 @@ where
         }
         settings::InitialSurface::XdgWindow(b) => {
             Command::batch(vec![init_command, get_window(b)])
-        }
-        #[cfg(feature = "input_method")]
-        settings::InitialSurface::InputMethodPopup(b) => {
-            Command::batch(vec![init_command, get_input_method_popup(b)])
         }
         settings::InitialSurface::None => init_command,
     };
@@ -300,8 +275,8 @@ where
     };
 
     #[allow(unsafe_code)]
-    let (compositor, renderer) =
-        C::new(compositor_settings, Some(&wrapper)).unwrap();
+    let compositor = C::new(compositor_settings, Some(&wrapper)).unwrap();
+    let renderer = compositor.create_renderer();
 
     let auto_size_surfaces = HashMap::new();
 
@@ -420,8 +395,6 @@ where
             .map(subscription_map::<A, E, C>)
             .into_recipes(),
     );
-
-    let natural_scroll = application.natural_scroll();
 
     let mut mouse_interaction = Interaction::default();
     let mut sctk_events: Vec<SctkEvent> = Vec::new();
@@ -726,7 +699,6 @@ where
                                 auto_size_surfaces.remove(&surface_id);
                                 interfaces.remove(&surface_id.inner());
                                 states.remove(&surface_id.inner());
-                                messages.push(application.close_requested(surface_id.inner()));
                                 destroyed_surface_ids.insert(id.id(), surface_id);
                                 compositor_surfaces.remove(&surface_id.inner());
                                 if exit_on_close_request && compositor_surfaces.is_empty() {
@@ -814,7 +786,6 @@ where
                                 auto_size_surfaces.remove(&surface_id);
                                 interfaces.remove(&surface_id.inner());
                                 states.remove(&surface_id.inner());
-                                messages.push(application.close_requested(surface_id.inner()));
                                 destroyed_surface_ids.insert(id.id(), surface_id);
                                 compositor_surfaces.remove(&surface_id.inner());
                                 if exit_on_close_request && compositor_surfaces.is_empty() {
@@ -871,7 +842,10 @@ where
                                         configure.new_size.1 as f64,
                                     );
                                 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
                             }
                         }
                         LayerSurfaceEventVariant::ScaleFactorChanged(sf, viewport) => {
@@ -901,7 +875,6 @@ where
                                 auto_size_surfaces.remove(&surface_id);
                                 interfaces.remove(&surface_id.inner());
                                 states.remove(&surface_id.inner());
-                                messages.push(application.close_requested(surface_id.inner()));
                                 destroyed_surface_ids.insert(id.id(), surface_id);
                                 compositor_surfaces.remove(&surface_id.inner());
                             }
@@ -1058,7 +1031,7 @@ where
                 // Dnd Surfaces are only drawn once
 
                 let id = wl_surface.id();
-                let (native_id, e) = match dnd_icon {
+                let (native_id, _e, node) = match dnd_icon {
                     DndIcon::Custom(id) => {
                         let mut e = application.view(id);
                         let state = e.as_widget().state();
@@ -1070,7 +1043,13 @@ where
                             children: e.as_widget().children(),
                         };
                         e.as_widget_mut().diff(&mut tree);
-                        (id, e)
+                        let node = Widget::layout(
+                            e.as_widget(),
+                            &mut tree,
+                            &renderer,
+                            &Limits::NONE,
+                        );
+                        (id, e, node)
                     }
                     DndIcon::Widget(id, widget_state) => {
                         let mut e = application.view(id);
@@ -1081,12 +1060,16 @@ where
                             children: e.as_widget().children(),
                         };
                         e.as_widget_mut().diff(&mut tree);
-                        (id, e)
+                        let node = Widget::layout(
+                            e.as_widget(),
+                            &mut tree,
+                            &renderer,
+                            &Limits::NONE,
+                        );
+                        (id, e, node)
                     }
                 };
 
-                let node =
-                    Widget::layout(e.as_widget(), &renderer, &Limits::NONE);
                 let bounds = node.bounds();
                 let (w, h) = (
                     (bounds.width.round()) as u32,
@@ -1174,6 +1157,9 @@ where
                             | SctkEvent::SessionLocked
                             | SctkEvent::SessionLockFinished
                             | SctkEvent::SessionUnlocked
+                            | SctkEvent::PopupEvent { .. }
+                            | SctkEvent::LayerSurfaceEvent { .. }
+                            | SctkEvent::WindowEvent { .. }
                     );
                     if remove {
                         let event = sctk_events.remove(i);
@@ -1181,7 +1167,6 @@ where
                             &mut mods,
                             &surface_ids,
                             &destroyed_surface_ids,
-                            natural_scroll,
                         ) {
                             runtime.broadcast(native_event, Status::Ignored);
                         }
@@ -1224,9 +1209,6 @@ where
                         &mut ev_proxy,
                     ));
 
-                    if application.should_exit() {
-                        break 'main;
-                    }
                     let _ = control_sender.start_send(ControlFlow::Wait);
                 } else {
                     let mut actions = Vec::new();
@@ -1236,12 +1218,12 @@ where
                         if matches!(surface_id, SurfaceIdWrapper::Dnd(_)) {
                             continue;
                         }
-                        let state = match states.get_mut(&surface_id.inner()) {
-                            Some(s) => s,
-                            None => continue,
-                        };
                         let mut filtered_sctk =
                             Vec::with_capacity(sctk_events.len());
+                        let Some(state) = states.get_mut(&surface_id.inner())
+                        else {
+                            continue;
+                        };
                         let mut i = 0;
 
                         while i < sctk_events.len() {
@@ -1258,7 +1240,6 @@ where
                             }
                         }
                         let has_events = !sctk_events.is_empty();
-                        let cursor_position = state.cursor();
                         debug.event_processing_started();
                         #[allow(unused_mut)]
                         let mut native_events: Vec<_> = filtered_sctk
@@ -1268,10 +1249,10 @@ where
                                     &mut mods,
                                     &surface_ids,
                                     &destroyed_surface_ids,
-                                    state.natural_scroll,
                                 )
                             })
                             .collect();
+
                         #[cfg(feature = "a11y")]
                         {
                             let mut filtered_a11y =
@@ -1285,8 +1266,8 @@ where
                             }
                             native_events.extend(
                                 filtered_a11y.into_iter().map(|e| {
-                                    iced_futures::core::event::Event::A11y(
-                                        iced_futures::core::widget::Id::from(
+                                    iced_runtime::core::event::Event::A11y(
+                                        iced_runtime::core::id::Id::from(
                                             u128::from(e.request.target.0)
                                                 as u64,
                                         ),
@@ -1306,7 +1287,7 @@ where
                             };
                             user_interface.update(
                                 native_events.as_slice(),
-                                cursor_position,
+                                state.cursor(),
                                 &mut renderer,
                                 &mut simple_clipboard,
                                 &mut messages,
@@ -1382,10 +1363,6 @@ where
 
                             // Update state
                             state.synchronize(&application);
-
-                            if application.should_exit() {
-                                break 'main;
-                            }
                         }
                         interfaces = ManuallyDrop::new(build_user_interfaces(
                             &application,
@@ -1598,7 +1575,6 @@ where
                         debug.layout_finished();
                         state.viewport_changed = false;
                     }
-
                     debug.draw_started();
                     let new_mouse_interaction = user_interface.draw(
                         &mut renderer,
@@ -1656,9 +1632,10 @@ where
                     Action::Focus => {
                         commands.push(Command::widget(
                             operation::focusable::focus(
-                                iced_futures::core::widget::Id::from(
-                                    u128::from(request.target.0) as u64,
-                                ),
+                                iced_runtime::core::id::Id::from(u128::from(
+                                    request.target.0,
+                                )
+                                    as u64),
                             ),
                         ));
                     }
@@ -1763,15 +1740,10 @@ where
     let size = if let Some((auto_size_w, auto_size_h, limits, dirty)) =
         auto_size_surfaces.remove(&id)
     {
-        let view: &mut dyn Widget<
-            <A as Program>::Message,
-            <A as Program>::Renderer,
-        > = view.as_widget_mut();
         // TODO would it be ok to diff against the current cache?
-        let _state = Widget::state(view);
-        view.diff(&mut Tree::empty());
-        let bounds = view.layout(renderer, &limits).bounds().size();
-
+        let mut tree = Tree::new(view.as_widget_mut());
+        let bounds = view.layout(&mut tree, renderer, &limits).bounds().size();
+        // XXX add a small number to make sure it doesn't get truncated...
         let (w, h) = (
             (bounds.width.round()) as u32,
             (bounds.height.round()) as u32,
@@ -1849,7 +1821,6 @@ where
     appearance: application::Appearance,
     application: PhantomData<A>,
     frame: Option<WlSurface>,
-    natural_scroll: bool,
     needs_redraw: bool,
     first: bool,
     wp_viewport: Option<WpViewport>,
@@ -1862,9 +1833,9 @@ where
 {
     /// Creates a new [`State`] for the provided [`Application`]
     pub fn new(application: &A, id: SurfaceIdWrapper) -> Self {
-        let title = application.title();
-        let scale_factor = application.scale_factor();
-        let theme = application.theme();
+        let title = application.title(id.inner());
+        let scale_factor = application.scale_factor(id.inner());
+        let theme = application.theme(id.inner());
         let appearance = theme.appearance(&application.style());
         let viewport = Viewport::with_physical_size(Size::new(1, 1), 1.0);
 
@@ -1882,7 +1853,6 @@ where
             appearance,
             application: PhantomData,
             frame: None,
-            natural_scroll: application.natural_scroll(),
             needs_redraw: false,
             first: true,
             wp_viewport: None,
@@ -1900,10 +1870,6 @@ where
 
     pub(crate) fn set_frame(&mut self, frame: Option<WlSurface>) {
         self.frame = frame;
-    }
-
-    pub(crate) fn frame(&self) -> Option<&WlSurface> {
-        self.frame.as_ref()
     }
 
     pub(crate) fn first(&self) -> bool {
@@ -2056,7 +2022,7 @@ where
 
     fn synchronize(&mut self, application: &A) {
         // Update theme and appearance
-        self.theme = application.theme();
+        self.theme = application.theme(self.id.inner());
         self.appearance = self.theme.appearance(&application.style());
     }
 }
@@ -2206,6 +2172,11 @@ where
                         Event::SctkEvent(IcedSctkEvent::UserEvent(e))
                     })));
             }
+            command::Action::Stream(stream) => {
+                runtime.run(Box::pin(
+                    stream.map(|e| Event::SctkEvent(IcedSctkEvent::UserEvent(e))),
+                ));
+            }
             command::Action::Clipboard(action) => match action {
                 clipboard::Action::Read(s_to_msg) => {
                     if matches!(clipboard.state,  crate::clipboard::State::Connected(_)) {
@@ -2307,10 +2278,9 @@ where
             ) => {
                 if let platform_specific::wayland::layer_surface::Action::LayerSurface{ mut builder, _phantom } = layer_surface_action {
                     if builder.size.is_none() {
-                        let mut e = application.view(builder.id);
-                        let _state = Widget::state(e.as_widget());
-                        e.as_widget_mut().diff(&mut Tree::empty());
-                        let node = Widget::layout(e.as_widget(), renderer, &builder.size_limits);
+                        let e = application.view(builder.id);
+                        let mut tree = Tree::new(e.as_widget());
+                        let node = Widget::layout(e.as_widget(), &mut tree, renderer, &builder.size_limits);
                         let bounds = node.bounds();
                         let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::LayerSurface(builder.id), (w, h, builder.size_limits, false));
@@ -2328,10 +2298,9 @@ where
             ) => {
                 if let platform_specific::wayland::window::Action::Window{ mut builder, _phantom } = window_action {
                     if builder.autosize {
-                        let mut e = application.view(builder.window_id);
-                        let _state = Widget::state(e.as_widget());
-                        e.as_widget_mut().diff(&mut Tree::empty());
-                        let node = Widget::layout(e.as_widget(), renderer, &builder.size_limits);
+                        let e = application.view(builder.window_id);
+                        let mut tree = Tree::new(e.as_widget());
+                        let node = Widget::layout(e.as_widget(), &mut tree, renderer, &builder.size_limits);
                         let bounds = node.bounds();
                         let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::Window(builder.window_id), (w, h, builder.size_limits, false));
@@ -2349,10 +2318,9 @@ where
             ) => {
                 if let popup::Action::Popup { mut popup, _phantom } = popup_action {
                     if popup.positioner.size.is_none() {
-                        let mut e = application.view(popup.id);
-                        let _state = Widget::state(e.as_widget());
-                        e.as_widget_mut().diff(&mut Tree::empty());
-                        let node = Widget::layout(e.as_widget(), renderer, &popup.positioner.size_limits);
+                        let e = application.view(popup.id);
+                        let mut tree = Tree::new(e.as_widget());
+                        let node = Widget::layout( e.as_widget(), &mut tree, renderer, &popup.positioner.size_limits);
                         let bounds = node.bounds();
                         let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::Popup(popup.id), (w, h, popup.positioner.size_limits, false));

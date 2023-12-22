@@ -1,7 +1,7 @@
 use crate::event::{self, Event};
 use crate::id::Id;
 use crate::layout;
-use crate::mouse;
+use crate::mouse::{self, Cursor};
 use crate::overlay;
 use crate::renderer;
 use crate::widget;
@@ -294,31 +294,26 @@ where
 
     fn layout(
         &self,
-        renderer: &Renderer,
-        limits: &layout::Limits,
+        _tree: &mut Tree,
+        _renderer: &Renderer,
+        _limits: &layout::Limits,
     ) -> layout::Node {
-        self.widget.layout(renderer, limits)
+        self.widget.layout(_tree, _renderer, _limits)
     }
 
     fn draw(
         &self,
-        state: &Tree,
-        renderer: &mut Renderer,
-        theme: &<Renderer as crate::Renderer>::Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor_position: mouse::Cursor,
-        viewport: &Rectangle,
+        _state: &Tree,
+        _renderer: &mut Renderer,
+        _theme: &<Renderer as crate::Renderer>::Theme,
+        _style: &renderer::Style,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
     ) {
         self.widget.draw(
-            state,
-            renderer,
-            theme,
-            style,
-            layout,
-            cursor_position,
-            viewport,
-        )
+            _state, _renderer, _theme, _style, _layout, _cursor, _viewport,
+        );
     }
 }
 
@@ -374,10 +369,11 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.widget.layout(renderer, limits)
+        self.widget.layout(tree, renderer, limits)
     }
 
     fn operate(
@@ -487,7 +483,7 @@ where
         viewport: &Rectangle,
     ) {
         self.widget
-            .draw(tree, renderer, theme, style, layout, cursor, viewport)
+            .draw(tree, renderer, theme, style, layout, cursor, viewport);
     }
 
     fn mouse_interaction(
@@ -520,7 +516,7 @@ where
         &self,
         _layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: mouse::Cursor,
+        _cursor_position: Cursor,
     ) -> iced_accessibility::A11yTree {
         self.widget.a11y_nodes(_layout, _state, _cursor_position)
     }
@@ -579,10 +575,11 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.element.widget.layout(renderer, limits)
+        self.element.widget.layout(tree, renderer, limits)
     }
 
     fn operate(
@@ -596,7 +593,7 @@ where
     ) {
         self.element
             .widget
-            .operate(state, layout, renderer, operation)
+            .operate(state, layout, renderer, operation);
     }
 
     fn on_event(

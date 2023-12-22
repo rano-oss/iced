@@ -1,3 +1,5 @@
+use iced::advanced::layout::Limits;
+use iced::theme;
 use iced::wayland::actions::layer_surface::SctkLayerSurfaceSettings;
 use iced::wayland::layer_surface::KeyboardInteractivity;
 use iced::wayland::InitialSurface;
@@ -6,7 +8,6 @@ use iced::widget::{
     text_input,
 };
 use iced::window::Id;
-use iced::{theme, Limits};
 use iced::{Element, Length, Sandbox, Settings};
 
 use std::collections::HashSet;
@@ -61,7 +62,7 @@ enum Color {
 }
 
 impl Color {
-    const ALL: &[Color] = &[
+    const ALL: &'static [Color] = &[
         Color::Black,
         Color::Red,
         Color::Orange,
@@ -258,10 +259,6 @@ impl Sandbox for App {
         Self: 'static + Sized,
     {
         <Self as iced::Application>::run(settings)
-    }
-
-    fn close_requested(&self, _id: Id) -> Message {
-        unimplemented!()
     }
 }
 

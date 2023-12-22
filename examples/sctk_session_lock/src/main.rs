@@ -1,3 +1,4 @@
+use iced::event::listen_raw;
 use iced::wayland::session_lock;
 use iced::{
     event::wayland::{Event as WaylandEvent, OutputEvent, SessionLockEvent},
@@ -15,7 +16,6 @@ fn main() {
 
 #[derive(Debug, Clone, Default)]
 struct Locker {
-    max_surface_id: u128,
     exit: bool,
 }
 
@@ -24,13 +24,6 @@ pub enum Message {
     WaylandEvent(WaylandEvent),
     TimeUp,
     Ignore,
-}
-
-impl Locker {
-    fn next_surface_id(&mut self) -> SurfaceId {
-        self.max_surface_id += 1;
-        SurfaceId(self.max_surface_id)
-    }
 }
 
 impl Application for Locker {
@@ -48,7 +41,7 @@ impl Application for Locker {
         )
     }
 
-    fn title(&self) -> String {
+    fn title(&self, _id: window::Id) -> String {
         String::from("Locker")
     }
 
@@ -58,7 +51,7 @@ impl Application for Locker {
                 WaylandEvent::Output(evt, output) => match evt {
                     OutputEvent::Created(_) => {
                         return session_lock::get_lock_surface(
-                            self.next_surface_id(),
+                            window::Id::unique(),
                             output,
                         );
                     }
@@ -76,7 +69,7 @@ impl Application for Locker {
                     }
                     SessionLockEvent::Unlocked => {
                         // Server has processed unlock, so it's safe to exit
-                        self.exit = true;
+                        std::process::exit(0);
                     }
                     _ => {}
                 },
@@ -90,16 +83,12 @@ impl Application for Locker {
         Command::none()
     }
 
-    fn should_exit(&self) -> bool {
-        self.exit
-    }
-
     fn view(&self, id: window::Id) -> Element<Self::Message> {
         text(format!("Lock Surface {:?}", id)).into()
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        iced::subscription::events_with(|evt, _| {
+        listen_raw(|evt, _| {
             if let iced::Event::PlatformSpecific(
                 iced::event::PlatformSpecific::Wayland(evt),
             ) = evt
@@ -109,9 +98,5 @@ impl Application for Locker {
                 None
             }
         })
-    }
-
-    fn close_requested(&self, _id: window::Id) -> Self::Message {
-        Message::Ignore
     }
 }

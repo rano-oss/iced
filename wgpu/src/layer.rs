@@ -1,16 +1,18 @@
 //! Organize rendering primitives into a flattened list of layers.
 mod image;
+mod pipeline;
 mod text;
 
 pub mod mesh;
 
 pub use image::Image;
 pub use mesh::Mesh;
+pub use pipeline::Pipeline;
 pub use text::Text;
 
 use crate::core;
 use crate::core::alignment;
-use crate::core::{Color, Font, Point, Rectangle, Size, Vector};
+use crate::core::{Color, Font, Pixels, Point, Rectangle, Size, Vector};
 use crate::graphics;
 use crate::graphics::color;
 use crate::graphics::Viewport;
@@ -34,6 +36,9 @@ pub struct Layer<'a> {
 
     /// The images of the [`Layer`].
     pub images: Vec<Image>,
+
+    /// The custom pipelines of this [`Layer`].
+    pub pipelines: Vec<Pipeline>,
 }
 
 impl<'a> Layer<'a> {
@@ -45,6 +50,7 @@ impl<'a> Layer<'a> {
             meshes: Vec::new(),
             text: Vec::new(),
             images: Vec::new(),
+            pipelines: Vec::new(),
         }
     }
 
@@ -56,28 +62,29 @@ impl<'a> Layer<'a> {
             Layer::new(Rectangle::with_size(viewport.logical_size()));
 
         for (i, line) in lines.iter().enumerate() {
-            let text = Text {
+            let text = text::Cached {
                 content: line.as_ref(),
                 bounds: Rectangle::new(
                     Point::new(11.0, 11.0 + 25.0 * i as f32),
                     Size::INFINITY,
                 ),
                 color: Color::new(0.9, 0.9, 0.9, 1.0),
-                size: 20.0,
+                size: Pixels(20.0),
                 line_height: core::text::LineHeight::default(),
                 font: Font::MONOSPACE,
                 horizontal_alignment: alignment::Horizontal::Left,
                 vertical_alignment: alignment::Vertical::Top,
+                clip_bounds: Rectangle::with_size(Size::INFINITY),
                 shaping: core::text::Shaping::Advanced,
             };
 
-            overlay.text.push(text);
+            overlay.text.push(Text::Cached(text.clone()));
 
-            overlay.text.push(Text {
+            overlay.text.push(Text::Cached(text::Cached {
                 bounds: text.bounds + Vector::new(-1.0, -1.0),
                 color: Color::BLACK,
                 ..text
-            });
+            }));
         }
 
         overlay
@@ -113,6 +120,36 @@ impl<'a> Layer<'a> {
         current_layer: usize,
     ) {
         match primitive {
+            Primitive::Paragraph {
+                paragraph,
+                position,
+                color,
+                clip_bounds,
+            } => {
+                let layer = &mut layers[current_layer];
+
+                layer.text.push(Text::Paragraph {
+                    paragraph: paragraph.clone(),
+                    position: *position + translation,
+                    color: *color,
+                    clip_bounds: *clip_bounds + translation,
+                });
+            }
+            Primitive::Editor {
+                editor,
+                position,
+                color,
+                clip_bounds,
+            } => {
+                let layer = &mut layers[current_layer];
+
+                layer.text.push(Text::Editor {
+                    editor: editor.clone(),
+                    position: *position + translation,
+                    color: *color,
+                    clip_bounds: *clip_bounds + translation,
+                });
+            }
             Primitive::Text {
                 content,
                 bounds,
@@ -123,10 +160,11 @@ impl<'a> Layer<'a> {
                 horizontal_alignment,
                 vertical_alignment,
                 shaping,
+                clip_bounds,
             } => {
                 let layer = &mut layers[current_layer];
 
-                layer.text.push(Text {
+                layer.text.push(Text::Cached(text::Cached {
                     content,
                     bounds: *bounds + translation,
                     size: *size,
@@ -136,7 +174,23 @@ impl<'a> Layer<'a> {
                     horizontal_alignment: *horizontal_alignment,
                     vertical_alignment: *vertical_alignment,
                     shaping: *shaping,
-                });
+                    clip_bounds: *clip_bounds + translation,
+                }));
+            }
+            graphics::Primitive::RawText(graphics::text::Raw {
+                buffer,
+                position,
+                color,
+                clip_bounds,
+            }) => {
+                let layer = &mut layers[current_layer];
+
+                layer.text.push(Text::Raw(graphics::text::Raw {
+                    buffer: buffer.clone(),
+                    position: *position + translation,
+                    color: *color,
+                    clip_bounds: *clip_bounds + translation,
+                }));
             }
             Primitive::Quad {
                 bounds,
@@ -162,6 +216,7 @@ impl<'a> Layer<'a> {
             }
             Primitive::Image {
                 handle,
+                filter_method,
                 bounds,
                 border_radius,
             } => {
@@ -169,6 +224,7 @@ impl<'a> Layer<'a> {
 
                 layer.images.push(Image::Raster {
                     handle: handle.clone(),
+                    filter_method: *filter_method,
                     bounds: *bounds + translation,
                     border_radius: *border_radius,
                 });
@@ -194,7 +250,7 @@ impl<'a> Layer<'a> {
                         translation,
                         primitive,
                         current_layer,
-                    )
+                    );
                 }
             }
             Primitive::Clip { bounds, content } => {
@@ -282,6 +338,20 @@ impl<'a> Layer<'a> {
                         }
                     }
                 },
+                primitive::Custom::Pipeline(pipeline) => {
+                    let layer = &mut layers[current_layer];
+                    let bounds = pipeline.bounds + translation;
+
+                    if let Some(clip_bounds) =
+                        layer.bounds.intersection(&bounds)
+                    {
+                        layer.pipelines.push(Pipeline {
+                            bounds,
+                            viewport: clip_bounds,
+                            primitive: pipeline.primitive.clone(),
+                        });
+                    }
+                }
             },
         }
     }

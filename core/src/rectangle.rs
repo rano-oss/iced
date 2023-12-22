@@ -74,9 +74,19 @@ impl Rectangle<f32> {
     /// Returns true if the given [`Point`] is contained in the [`Rectangle`].
     pub fn contains(&self, point: Point) -> bool {
         self.x <= point.x
-            && point.x <= self.x + self.width
+            && point.x < self.x + self.width
             && self.y <= point.y
-            && point.y <= self.y + self.height
+            && point.y < self.y + self.height
+    }
+
+    /// Returns true if the given [`Point`] is contained in the [`Rectangle`].
+    /// The [`Point`] must be strictly contained, i.e. it must not be on the
+    /// border.
+    pub fn contains_strict(&self, point: Point) -> bool {
+        self.x < point.x
+            && point.x < self.x + self.width
+            && self.y < point.y
+            && point.y < self.y + self.height
     }
 
     /// Returns true if the current [`Rectangle`] is completely within the given
@@ -84,6 +94,16 @@ impl Rectangle<f32> {
     pub fn is_within(&self, container: &Rectangle) -> bool {
         container.contains(self.position())
             && container.contains(
+                self.position() + Vector::new(self.width, self.height),
+            )
+    }
+
+    /// Returns true if the current [`Rectangle`] is completely within the given
+    /// `container`. The [`Rectangle`] must be strictly contained, i.e. it must
+    /// not be on the border.
+    pub fn is_within_strict(&self, container: &Rectangle) -> bool {
+        container.contains_strict(self.position())
+            && container.contains_strict(
                 self.position() + Vector::new(self.width, self.height),
             )
     }

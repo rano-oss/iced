@@ -5,7 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- Detect mouse side buttons.
+### Added
+- Explicit text caching. [#2058](https://github.com/iced-rs/iced/pull/2058)
+- `Theme::Custom::with_fn` for custom extended palette generation. [#2067](https://github.com/iced-rs/iced/pull/2067)
+
+### Changed
+- Updated `wgpu` to `0.17`. [#2065](https://github.com/iced-rs/iced/pull/2065)
+- Changed `Button::style` to take an `impl Into<...>` for consistency. [#2046](https://github.com/iced-rs/iced/pull/2046)
+
+### Fixed
+- Missing `width` attribute in `styling` example. [#2062](https://github.com/iced-rs/iced/pull/2062)
+
+Many thanks to...
+
+- @akshayr-mecha
+- @dtzxporter
 
 Many thanks to...
 - @edfloreshz
@@ -47,7 +61,6 @@ Many thanks to...
 - Nix instructions to `DEPENDENCIES.md`. [#1859](https://github.com/iced-rs/iced/pull/1859)
 - Loading spinners example. [#1902](https://github.com/iced-rs/iced/pull/1902)
 - Workflow that verifies `CHANGELOG` is always up-to-date. [#1970](https://github.com/iced-rs/iced/pull/1970)
-- Keybinds to cycle `ComboBox` options. [#1991](https://github.com/iced-rs/iced/pull/1991)
 - Outdated mentions of `iced_native` in `README`. [#1979](https://github.com/iced-rs/iced/pull/1979)
 
 ### Changed
@@ -83,11 +96,18 @@ Many thanks to...
 - Quad rendering including border only inside of the bounds. [#1843](https://github.com/iced-rs/iced/pull/1843)
 - Redraw requests not being forwarded for `Component` overlays. [#1949](https://github.com/iced-rs/iced/pull/1949)
 - Blinking input cursor when window loses focus. [#1955](https://github.com/iced-rs/iced/pull/1955)
-- `Tooltip` overlay position inside `Scrollable`. [#1978](https://github.com/iced-rs/iced/pull/1978)
 - `BorderRadius` not exposed in root crate. [#1972](https://github.com/iced-rs/iced/pull/1972)
 - Outdated `ROADMAP`. [#1958](https://github.com/iced-rs/iced/pull/1958)
+
+### Patched
+- Keybinds to cycle `ComboBox` options. [#1991](https://github.com/iced-rs/iced/pull/1991)
+- `Tooltip` overlay position inside `Scrollable`. [#1978](https://github.com/iced-rs/iced/pull/1978)
 - `iced_wgpu` freezing on empty layers. [#1996](https://github.com/iced-rs/iced/pull/1996)
 - `image::Viewer` reacting to any scroll event. [#1998](https://github.com/iced-rs/iced/pull/1998)
+- `TextInput` pasting text when `Alt` key is pressed. [#2006](https://github.com/iced-rs/iced/pull/2006)
+- Broken link to old `iced_native` crate in `README`. [#2024](https://github.com/iced-rs/iced/pull/2024)
+- `Rectangle::contains` being non-exclusive. [#2017](https://github.com/iced-rs/iced/pull/2017)
+- Documentation for `Arc` and `arc::Elliptical`. [#2008](https://github.com/iced-rs/iced/pull/2008)
 
 Many thanks to...
 
@@ -100,6 +120,7 @@ Many thanks to...
 - @clarkmoody
 - @Davidster
 - @Drakulix
+- @genusistimelord
 - @GyulyVGC
 - @ids1024
 - @jhff
@@ -109,11 +130,13 @@ Many thanks to...
 - @malramsay64
 - @nicksenger
 - @nicoburns
+- @NyxAlexandra
 - @Redhawk18
 - @RGBCube
 - @rs017991
 - @tarkah
 - @thunderstorm010
+- @ua-kxie
 - @wash2
 - @wiiznokes
 

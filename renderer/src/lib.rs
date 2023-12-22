@@ -1,3 +1,9 @@
+#![forbid(rust_2018_idioms)]
+#![deny(unsafe_code, unused_results, rustdoc::broken_intra_doc_links)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#[cfg(feature = "wgpu")]
+pub use iced_wgpu as wgpu;
+
 pub mod compositor;
 
 #[cfg(feature = "geometry")]
@@ -16,7 +22,8 @@ pub use geometry::Geometry;
 
 use crate::core::renderer;
 use crate::core::text::{self, Text};
-use crate::core::{Background, Font, Point, Rectangle, Size, Vector};
+use crate::core::{Background, Color, Font, Pixels, Point, Rectangle, Vector};
+use crate::graphics::text::{Editor, Paragraph, Raw};
 use crate::graphics::Mesh;
 
 use std::borrow::Cow;
@@ -44,7 +51,7 @@ impl<T> Renderer<T> {
     pub fn draw_mesh(&mut self, mesh: Mesh) {
         match self {
             Self::TinySkia(_) => {
-                log::warn!("Unsupported mesh primitive: {:?}", mesh)
+                log::warn!("Unsupported mesh primitive: {mesh:?}");
             }
             #[cfg(feature = "wgpu")]
             Self::Wgpu(renderer) => {
@@ -142,6 +149,9 @@ impl<T> core::Renderer for Renderer<T> {
 
 impl<T> text::Renderer for Renderer<T> {
     type Font = Font;
+    type Paragraph = Paragraph;
+    type Editor = Editor;
+    type Raw = Raw;
 
     const ICON_FONT: Font = iced_tiny_skia::Renderer::<T>::ICON_FONT;
     const CHECKMARK_ICON: char = iced_tiny_skia::Renderer::<T>::CHECKMARK_ICON;
@@ -152,59 +162,58 @@ impl<T> text::Renderer for Renderer<T> {
         delegate!(self, renderer, renderer.default_font())
     }
 
-    fn default_size(&self) -> f32 {
+    fn default_size(&self) -> Pixels {
         delegate!(self, renderer, renderer.default_size())
-    }
-
-    fn measure(
-        &self,
-        content: &str,
-        size: f32,
-        line_height: text::LineHeight,
-        font: Font,
-        bounds: Size,
-        shaping: text::Shaping,
-    ) -> Size {
-        delegate!(
-            self,
-            renderer,
-            renderer.measure(content, size, line_height, font, bounds, shaping)
-        )
-    }
-
-    fn hit_test(
-        &self,
-        content: &str,
-        size: f32,
-        line_height: text::LineHeight,
-        font: Font,
-        bounds: Size,
-        shaping: text::Shaping,
-        point: Point,
-        nearest_only: bool,
-    ) -> Option<text::Hit> {
-        delegate!(
-            self,
-            renderer,
-            renderer.hit_test(
-                content,
-                size,
-                line_height,
-                font,
-                bounds,
-                shaping,
-                point,
-                nearest_only
-            )
-        )
     }
 
     fn load_font(&mut self, bytes: Cow<'static, [u8]>) {
         delegate!(self, renderer, renderer.load_font(bytes));
     }
 
-    fn fill_text(&mut self, text: Text<'_, Self::Font>) {
-        delegate!(self, renderer, renderer.fill_text(text));
+    fn fill_paragraph(
+        &mut self,
+        paragraph: &Self::Paragraph,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.fill_paragraph(paragraph, position, color, clip_bounds)
+        );
+    }
+
+    fn fill_editor(
+        &mut self,
+        editor: &Self::Editor,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.fill_editor(editor, position, color, clip_bounds)
+        );
+    }
+
+    fn fill_raw(&mut self, raw: Self::Raw) {
+        delegate!(self, renderer, renderer.fill_raw(raw));
+    }
+
+    fn fill_text(
+        &mut self,
+        text: Text<'_, Self::Font>,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    ) {
+        delegate!(
+            self,
+            renderer,
+            renderer.fill_text(text, position, color, clip_bounds)
+        );
     }
 }
 
@@ -212,27 +221,31 @@ impl<T> text::Renderer for Renderer<T> {
 impl<T> crate::core::image::Renderer for Renderer<T> {
     type Handle = crate::core::image::Handle;
 
-    fn dimensions(&self, handle: &crate::core::image::Handle) -> Size<u32> {
+    fn dimensions(
+        &self,
+        handle: &crate::core::image::Handle,
+    ) -> core::Size<u32> {
         delegate!(self, renderer, renderer.dimensions(handle))
     }
 
     fn draw(
         &mut self,
         handle: crate::core::image::Handle,
+        filter_method: crate::core::image::FilterMethod,
         bounds: Rectangle,
         border_radius: [f32; 4],
     ) {
         delegate!(
             self,
             renderer,
-            renderer.draw(handle, bounds, border_radius,)
+            renderer.draw(handle, filter_method, bounds, border_radius)
         );
     }
 }
 
 #[cfg(feature = "svg")]
 impl<T> crate::core::svg::Renderer for Renderer<T> {
-    fn dimensions(&self, handle: &crate::core::svg::Handle) -> Size<u32> {
+    fn dimensions(&self, handle: &crate::core::svg::Handle) -> core::Size<u32> {
         delegate!(self, renderer, renderer.dimensions(handle))
     }
 
@@ -242,7 +255,7 @@ impl<T> crate::core::svg::Renderer for Renderer<T> {
         color: Option<crate::core::Color>,
         bounds: Rectangle,
     ) {
-        delegate!(self, renderer, renderer.draw(handle, color, bounds))
+        delegate!(self, renderer, renderer.draw(handle, color, bounds));
     }
 }
 
@@ -258,6 +271,7 @@ impl<T> crate::graphics::geometry::Renderer for Renderer<T> {
                         crate::Geometry::TinySkia(primitive) => {
                             renderer.draw_primitive(primitive);
                         }
+                        #[allow(unreachable_patterns)]
                         _ => unreachable!(),
                     }
                 }
@@ -269,9 +283,29 @@ impl<T> crate::graphics::geometry::Renderer for Renderer<T> {
                         crate::Geometry::Wgpu(primitive) => {
                             renderer.draw_primitive(primitive);
                         }
-                        _ => unreachable!(),
+                        crate::Geometry::TinySkia(_) => unreachable!(),
                     }
                 }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "wgpu")]
+impl<T> iced_wgpu::primitive::pipeline::Renderer for Renderer<T> {
+    fn draw_pipeline_primitive(
+        &mut self,
+        bounds: Rectangle,
+        primitive: impl wgpu::primitive::pipeline::Primitive,
+    ) {
+        match self {
+            Self::TinySkia(_renderer) => {
+                log::warn!(
+                    "Custom shader primitive is unavailable with tiny-skia."
+                );
+            }
+            Self::Wgpu(renderer) => {
+                renderer.draw_pipeline_primitive(bounds, primitive);
             }
         }
     }

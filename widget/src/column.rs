@@ -124,6 +124,7 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -140,6 +141,7 @@ where
             self.spacing,
             self.align_items,
             &self.children,
+            &mut tree.children,
         )
     }
 
@@ -159,7 +161,7 @@ where
                     child
                         .as_widget()
                         .operate(state, layout, renderer, operation);
-                })
+                });
         });
     }
 
@@ -224,15 +226,17 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        for ((child, state), layout) in self
-            .children
-            .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-        {
-            child
-                .as_widget()
-                .draw(state, renderer, theme, style, layout, cursor, viewport);
+        if let Some(viewport) = layout.bounds().intersection(viewport) {
+            for ((child, state), layout) in self
+                .children
+                .iter()
+                .zip(&tree.children)
+                .zip(layout.children())
+            {
+                child.as_widget().draw(
+                    state, renderer, theme, style, layout, cursor, &viewport,
+                );
+            }
         }
     }
 
@@ -251,7 +255,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        p: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::A11yTree;
         A11yTree::join(
@@ -260,7 +264,7 @@ where
                 .zip(layout.children())
                 .zip(state.children.iter())
                 .map(|((c, c_layout), state)| {
-                    c.as_widget().a11y_nodes(c_layout, state, p)
+                    c.as_widget().a11y_nodes(c_layout, state, cursor)
                 }),
         )
     }

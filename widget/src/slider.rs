@@ -21,6 +21,9 @@ pub use iced_style::slider::{
     Appearance, Handle, HandleShape, Rail, StyleSheet,
 };
 
+#[cfg(feature = "a11y")]
+use std::borrow::Cow;
+
 /// An horizontal bar and a handle that selects a single value from a range of
 /// values.
 ///
@@ -154,8 +157,43 @@ where
     }
 
     /// Sets the step size of the [`Slider`].
-    pub fn step(mut self, step: T) -> Self {
-        self.step = step;
+    pub fn step(mut self, step: impl Into<T>) -> Self {
+        self.step = step.into();
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the name of the [`Button`].
+    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description_widget(
+        mut self,
+        description: &impl iced_accessibility::Describes,
+    ) -> Self {
+        self.description = Some(iced_accessibility::Description::Id(
+            description.description(),
+        ));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description(mut self, description: impl Into<Cow<'a, str>>) -> Self {
+        self.description =
+            Some(iced_accessibility::Description::Text(description.into()));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the label of the [`Button`].
+    pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
+        self.label =
+            Some(label.label().into_iter().map(|l| l.into()).collect());
         self
     }
 
@@ -221,6 +259,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -274,7 +313,7 @@ where
             &self.range,
             theme,
             &self.style,
-        )
+        );
     }
 
     fn mouse_interaction(
@@ -293,7 +332,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        cursor_position: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},
@@ -301,7 +340,7 @@ where
         };
 
         let bounds = layout.bounds();
-        let is_hovered = cursor_position.is_over(bounds);
+        let is_hovered = cursor.is_over(bounds);
         let Rectangle {
             x,
             y,
@@ -595,7 +634,7 @@ pub fn draw<T, R>(
                 border_color: Color::TRANSPARENT,
             },
             if auto_angle {
-                gradient.angle = Radians::from(Degrees(180.0));
+                gradient.angle = Radians::from(Degrees(90.0));
                 gradient
             } else {
                 gradient

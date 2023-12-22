@@ -19,7 +19,7 @@ use crate::core::widget::tree::{self, Tree};
 use crate::core::widget::Widget;
 use crate::core::Element;
 use crate::core::{
-    self, Clipboard, Hasher, Length, Point, Rectangle, Shell, Size,
+    self, Clipboard, Hasher, Length, Point, Rectangle, Shell, Size, Vector,
 };
 use crate::runtime::overlay::Nested;
 
@@ -155,11 +155,14 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.with_element(|element| {
-            element.as_widget().layout(renderer, limits)
+            element
+                .as_widget()
+                .layout(&mut tree.children[0], renderer, limits)
         })
     }
 
@@ -243,8 +246,8 @@ where
                 layout,
                 cursor,
                 viewport,
-            )
-        })
+            );
+        });
     }
 
     fn overlay<'b>(
@@ -282,7 +285,7 @@ where
             .map(|position| overlay::Element::new(position, Box::new(overlay)))
     }
 
-    fn set_id(&mut self, _id: crate::core::id::Id) {
+    fn set_id(&mut self, _id: iced_runtime::core::id::Id) {
         if let Some(e) = self.element.borrow_mut().as_mut() {
             if let Some(e) = e.borrow_mut().as_mut() {
                 e.as_widget_mut().set_id(_id);
@@ -290,7 +293,7 @@ where
         }
     }
 
-    fn id(&self) -> Option<crate::core::id::Id> {
+    fn id(&self) -> Option<iced_runtime::core::id::Id> {
         if let Some(e) = self.element.borrow().as_ref() {
             if let Some(e) = e.borrow().as_ref() {
                 return e.as_widget().id();
@@ -346,13 +349,14 @@ where
     Renderer: core::Renderer,
 {
     fn layout(
-        &self,
+        &mut self,
         renderer: &Renderer,
         bounds: Size,
         position: Point,
+        translation: Vector,
     ) -> layout::Node {
         self.with_overlay_maybe(|overlay| {
-            overlay.layout(renderer, bounds, position)
+            overlay.layout(renderer, bounds, position, translation)
         })
         .unwrap_or_default()
     }

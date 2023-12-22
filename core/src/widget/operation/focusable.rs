@@ -50,7 +50,7 @@ pub fn focus<T>(target: Id) -> impl Operation<T> {
             _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
-            operate_on_children(self)
+            operate_on_children(self);
         }
     }
 
@@ -86,7 +86,7 @@ where
             _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
-            operate_on_children(self)
+            operate_on_children(self);
         }
 
         fn finish(&self) -> Outcome<T> {
@@ -133,7 +133,7 @@ pub fn focus_previous<T>() -> impl Operation<T> {
             _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
-            operate_on_children(self)
+            operate_on_children(self);
         }
     }
 
@@ -167,7 +167,7 @@ pub fn focus_next<T>() -> impl Operation<T> {
             _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
         ) {
-            operate_on_children(self)
+            operate_on_children(self);
         }
     }
 
@@ -194,7 +194,7 @@ pub fn find_focused() -> impl Operation<Id> {
             _bounds: Rectangle,
             operate_on_children: &mut dyn FnMut(&mut dyn Operation<Id>),
         ) {
-            operate_on_children(self)
+            operate_on_children(self);
         }
 
         fn finish(&self) -> Outcome<Id> {

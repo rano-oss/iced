@@ -1,5 +1,5 @@
 use crate::runtime::window::Id;
-use crate::{Command, Element, Executor, Settings, Subscription};
+use crate::{Command, Element, Executor, Settings as Settings_, Subscription};
 
 /// wayland sandbox
 pub mod sandbox;
@@ -12,9 +12,6 @@ pub use iced_sctk::{application::SurfaceIdWrapper, commands::*, settings::*};
 ///
 /// Unlike the impure version, the `view` method of this trait takes an
 /// immutable reference to `self` and returns a pure [`Element`].
-///
-/// [`Application`]: crate::Application
-/// [`Element`]: pure::Element
 pub trait Application: Sized {
     /// The [`Executor`] that will run commands and subscriptions.
     ///
@@ -31,7 +28,7 @@ pub trait Application: Sized {
     type Theme: Default + StyleSheet;
 
     /// The data needed to initialize your [`Application`].
-    type Flags: Clone;
+    type Flags;
 
     /// Initializes the [`Application`] with the flags provided to
     /// [`run`] as part of the [`Settings`].
@@ -49,7 +46,7 @@ pub trait Application: Sized {
     ///
     /// This title can be dynamic! The runtime will automatically update the
     /// title of your application when necessary.
-    fn title(&self) -> String;
+    fn title(&self, id: Id) -> String;
 
     /// Handles a __message__ and updates the state of the [`Application`].
     ///
@@ -63,14 +60,11 @@ pub trait Application: Sized {
     /// Returns the current [`Theme`] of the [`Application`].
     ///
     /// [`Theme`]: Self::Theme
-    fn theme(&self) -> Self::Theme {
+    fn theme(&self, _id: Id) -> Self::Theme {
         Self::Theme::default()
     }
 
-    /// Returns the current [`Style`] of the [`Theme`].
-    ///
-    /// [`Style`]: <Self::Theme as StyleSheet>::Style
-    /// [`Theme`]: Self::Theme
+    /// Returns the current Style of the Theme.
     fn style(&self) -> <Self::Theme as StyleSheet>::Style {
         <Self::Theme as StyleSheet>::Style::default()
     }
@@ -104,19 +98,9 @@ pub trait Application: Sized {
     /// while a scale factor of `0.5` will shrink them to half their size.
     ///
     /// By default, it returns `1.0`.
-    fn scale_factor(&self) -> f64 {
+    fn scale_factor(&self, _id: Id) -> f64 {
         1.0
     }
-
-    /// Returns whether the [`Application`] should be terminated.
-    ///
-    /// By default, it returns `false`.
-    fn should_exit(&self) -> bool {
-        false
-    }
-
-    /// window was requested to close
-    fn close_requested(&self, id: Id) -> Self::Message;
 
     /// Runs the [`Application`].
     ///
@@ -127,7 +111,7 @@ pub trait Application: Sized {
     /// [`Error`] during startup.
     ///
     /// [`Error`]: crate::Error
-    fn run(settings: Settings<Self::Flags>) -> crate::Result
+    fn run(settings: Settings_<Self::Flags>) -> crate::Result
     where
         Self: 'static,
     {
@@ -153,7 +137,7 @@ pub trait Application: Sized {
 
 struct Instance<A: Application>(A);
 
-impl<A> crate::runtime::Program for Instance<A>
+impl<A> crate::runtime::multi_window::Program for Instance<A>
 where
     A: Application,
 {
@@ -181,12 +165,12 @@ where
         (Instance(app), command)
     }
 
-    fn title(&self) -> String {
-        self.0.title()
+    fn title(&self, window: Id) -> String {
+        self.0.title(window)
     }
 
-    fn theme(&self) -> A::Theme {
-        self.0.theme()
+    fn theme(&self, window: Id) -> A::Theme {
+        self.0.theme(window)
     }
 
     fn style(&self) -> <A::Theme as StyleSheet>::Style {
@@ -197,15 +181,7 @@ where
         self.0.subscription()
     }
 
-    fn scale_factor(&self) -> f64 {
-        self.0.scale_factor()
-    }
-
-    fn should_exit(&self) -> bool {
-        self.0.should_exit()
-    }
-
-    fn close_requested(&self, id: Id) -> Self::Message {
-        self.0.close_requested(id)
+    fn scale_factor(&self, window: Id) -> f64 {
+        self.0.scale_factor(window)
     }
 }

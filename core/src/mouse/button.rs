@@ -10,11 +10,11 @@ pub enum Button {
     /// The middle (wheel) button.
     Middle,
 
-    /// The side button often used as "back" in web browsers.
-    Back,
-
-    /// The side button often used as "forward" in web browsers.
+    /// The forward button.
     Forward,
+
+    /// The back button.
+    Back,
 
     /// Some other button.
     Other(u16),

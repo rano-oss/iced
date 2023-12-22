@@ -1,21 +1,27 @@
 [package]
 name = "iced"
-version = "0.10.0"
-authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
-edition = "2021"
 description = "A cross-platform GUI library inspired by Elm"
-license = "MIT"
-repository = "https://github.com/iced-rs/iced"
-documentation = "https://docs.rs/iced"
-readme = "README.md"
-keywords = ["gui", "ui", "graphics", "interface", "widgets"]
-categories = ["gui"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+all-features = true
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [features]
 # Enable the `wgpu` GPU-accelerated renderer backend
-wgpu = ["iced_renderer/wgpu"]
+wgpu = ["iced_renderer/wgpu", "iced_widget/wgpu"]
 # Enables the `Image` widget
-image = ["iced_widget/image", "image_rs"]
+image = ["iced_widget/image", "dep:image"]
 # Enables the `Svg` widget
 svg = ["iced_widget/svg"]
 # Enables the `Canvas` widget
@@ -36,8 +42,12 @@ smol = ["iced_futures/smol"]
 palette = ["iced_core/palette"]
 # Enables broken "sRGB linear" blending to reproduce color management of the Web
 web-colors = ["iced_renderer/web-colors"]
-# Enables querying system information
-system = ["iced_winit?/system", "iced_sctk?/system"]
+# Enables the WebGL backend, replacing WebGPU
+webgl = ["iced_renderer/webgl"]
+# Enables the syntax `highlighter` module
+highlighter = ["iced_highlighter"]
+# Enables experimental multi-window support.
+multi-window = ["iced_winit?/multi-window"]
 # Enables the advanced module
 advanced = []
 # Enables the `accesskit` accessibility library
@@ -45,14 +55,31 @@ a11y = ["iced_accessibility", "iced_core/a11y", "iced_widget/a11y", "iced_winit?
 # Enables the winit shell. Conflicts with `wayland` and `glutin`.
 winit = ["iced_winit", "iced_accessibility?/accesskit_winit"]
 # Enables the sctk shell. Conflicts with `winit` and `glutin`.
-wayland = ["iced_sctk", "iced_widget/wayland", "iced_accessibility?/accesskit_unix"]
+wayland = ["iced_sctk", "iced_widget/wayland", "iced_accessibility?/accesskit_unix", "iced_core/wayland"]
 # Enables the sctk with input method support.
-wayland_input_method = ["iced_sctk/input_method", "iced_sctk/virtual_keyboard"]
+wayland_input_method = ["iced_sctk/input_method"]
 # Enables the sctk with virtual keyboard.
 wayland_virtual_keyboard = ["iced_sctk/virtual_keyboard"]
 
-[badges]
-maintenance = { status = "actively-developed" }
+[dependencies]
+iced_core.workspace = true
+iced_futures.workspace = true
+iced_renderer.workspace = true
+iced_widget.workspace = true
+iced_winit.features = ["application"]
+iced_winit.workspace = true
+iced_winit.optional = true
+iced_sctk.workspace = true
+iced_sctk.optional = true
+iced_highlighter.workspace = true
+iced_highlighter.optional = true
+iced_accessibility.workspace = true
+iced_accessibility.optional = true
+thiserror.workspace = true
+
+image.workspace = true
+image.optional = true
+
 
 [workspace]
 members = [
@@ -71,25 +98,6 @@ members = [
     "sctk"
 ]
 
-[dependencies]
-iced_sctk = { path = "./sctk", optional = true }
-iced_accessibility = { version = "0.1", path = "accessibility", default-features = false, optional = true }
-iced_core = { version = "0.10", path = "core" }
-iced_futures = { version = "0.7", path = "futures" }
-iced_renderer = { version = "0.1", path = "renderer", default-features = false }
-iced_widget = { version = "0.1", path = "widget" }
-iced_winit = { version = "0.10", path = "winit", features = ["application"], optional = true }
-thiserror = "1"
-
-[dependencies.image_rs]
-version = "0.24"
-package = "image"
-optional = true
-
-[package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "docsrs"]
-all-features = true
-
 [profile.release-opt]
 inherits = "release"
 codegen-units = 1
@@ -99,3 +107,75 @@ incremental = false
 opt-level = 3
 overflow-checks = false
 strip = "debuginfo"
+
+[workspace.package]
+version = "0.12.0"
+authors = ["Héctor Ramón Jiménez <hector@hecrj.dev>"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/iced-rs/iced"
+homepage = "https://iced.rs"
+categories = ["gui"]
+keywords = ["gui", "ui", "graphics", "interface", "widgets"]
+
+[workspace.dependencies]
+iced = { version = "0.12", path = "." }
+iced_core = { version = "0.12", path = "core" }
+iced_futures = { version = "0.12", path = "futures" }
+iced_graphics = { version = "0.12", path = "graphics" }
+iced_highlighter = { version = "0.12", path = "highlighter" }
+iced_renderer = { version = "0.12", path = "renderer" }
+iced_runtime = { version = "0.12", path = "runtime" }
+iced_style = { version = "0.12", path = "style" }
+iced_tiny_skia = { version = "0.12", path = "tiny_skia" }
+iced_wgpu = { version = "0.12", path = "wgpu" }
+iced_widget = { version = "0.12", path = "widget" }
+iced_winit = { version = "0.12", path = "winit", features = ["application"] }
+iced_sctk = { version = "0.1", path = "sctk" }
+iced_accessibility = { version = "0.1", path = "accessibility" }
+
+async-std = "1.0"
+bitflags = "1.0"
+bytemuck = { version = "1.0", features = ["derive"] }
+cosmic-text = { git = "https://github.com/pop-os/cosmic-text.git", branch = "refactor" }
+futures = "0.3"
+glam = "0.24"
+glyphon = { git = "https://github.com/jackpot51/glyphon.git", branch = "refactor" }
+guillotiere = "0.6"
+half = "2.2"
+image = "0.24"
+instant = "0.1"
+kamadak-exif = "0.5"
+kurbo = "0.9"
+log = "0.4"
+lyon = "1.0"
+lyon_path = "1.0"
+num-traits = "0.2"
+once_cell = "1.0"
+ouroboros = "0.17"
+palette = "0.7"
+qrcode = { version = "0.12", default-features = false }
+raw-window-handle = "0.5"
+resvg = "0.37"
+rustc-hash = "1.0"
+sctk = { package = "smithay-client-toolkit", git = "https://github.com/smithay/client-toolkit", rev = "2e9bf9f" }
+smol = "1.0"
+softbuffer = { git = "https://github.com/pop-os/softbuffer", tag = "v0.3-cosmic" } 
+syntect = "5.1"
+sysinfo = "0.28"
+thiserror = "1.0"
+tiny-skia = "0.11"
+tokio = "1.0"
+tracing = "0.1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+unicode-segmentation = "1.0"
+wasm-bindgen-futures = "0.4"
+wasm-timer = "0.2"
+wayland-protocols = { version = "0.31.0", features = [ "staging"]}
+web-sys = "=0.3.64"
+wgpu = "0.18"
+winapi = "0.3"
+window_clipboard = "0.3"
+[workspace.dependencies.winit]
+git = "https://github.com/pop-os/winit.git"
+branch = "master"

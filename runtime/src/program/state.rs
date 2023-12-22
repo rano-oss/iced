@@ -1,9 +1,10 @@
+use iced_core::widget::operation::{OperationWrapper, Outcome};
+use iced_core::widget::OperationOutputWrapper;
+
 use crate::core::event::{self, Event};
 use crate::core::mouse;
 use crate::core::renderer;
-use crate::core::widget::operation::{
-    Operation, OperationOutputWrapper, OperationWrapper, Outcome,
-};
+use crate::core::widget::operation::{self, Operation};
 use crate::core::{Clipboard, Size};
 use crate::user_interface::{self, UserInterface};
 use crate::{command::Action, Command, Debug, Program};
@@ -228,7 +229,7 @@ where
         (uncaptured_events, actions)
     }
 
-    /// Applies [`widget::Operation`]s to the [`State`]
+    /// Applies [`Operation`]s to the [`State`]
     pub fn operate(
         &mut self,
         id: crate::window::Id,
@@ -255,11 +256,13 @@ where
                 user_interface.operate(renderer, operation.as_mut());
 
                 match operation.finish() {
-                    Outcome::None => {}
-                    Outcome::Some(OperationOutputWrapper::Message(message)) => {
-                        self.queued_messages.push(message)
+                    operation::Outcome::None => {}
+                    operation::Outcome::Some(
+                        OperationOutputWrapper::Message(message),
+                    ) => {
+                        self.queued_messages.push(message);
                     }
-                    Outcome::Chain(next) => {
+                    operation::Outcome::Chain(next) => {
                         current_operation = Some(next);
                     }
                     _ => {}
@@ -272,7 +275,7 @@ where
 }
 
 fn build_user_interface<'a, P: Program>(
-    id: crate::window::Id,
+    _id: crate::window::Id,
     program: &'a mut P,
     cache: user_interface::Cache,
     renderer: &mut P::Renderer,

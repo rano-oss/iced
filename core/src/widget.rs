@@ -53,6 +53,7 @@ where
     /// user interface.
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node;
@@ -60,7 +61,7 @@ where
     /// Draws the [`Widget`] using the associated `Renderer`.
     fn draw(
         &self,
-        state: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         style: &renderer::Style,
@@ -148,7 +149,7 @@ where
         &self,
         _layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: mouse::Cursor,
+        _cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         iced_accessibility::A11yTree::default()
     }

@@ -1,19 +1,18 @@
-use iced::alignment;
 use iced::keyboard::KeyCode;
 use iced::theme::{Button, Container};
 use iced::widget::{button, column, container, image, row, text, text_input};
 use iced::window::screenshot::{self, Screenshot};
+use iced::{alignment, window};
 use iced::{
-    event, executor, keyboard, subscription, Alignment, Application, Command,
-    ContentFit, Element, Event, Length, Rectangle, Renderer, Subscription,
-    Theme,
+    event, executor, keyboard, Alignment, Application, Command, ContentFit,
+    Element, Event, Length, Rectangle, Renderer, Subscription, Theme,
 };
 
 use ::image as img;
 use ::image::ColorType;
 
 fn main() -> iced::Result {
-    env_logger::builder().format_timestamp(None).init();
+    tracing_subscriber::fmt::init();
 
     Example::run(iced::Settings::default())
 }
@@ -71,7 +70,10 @@ impl Application for Example {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::Screenshot => {
-                return iced::window::screenshot(Message::ScreenshotData);
+                return iced::window::screenshot(
+                    window::Id::MAIN,
+                    Message::ScreenshotData,
+                );
             }
             Message::ScreenshotData(screenshot) => {
                 self.screenshot = Some(screenshot);
@@ -185,8 +187,8 @@ impl Application for Example {
                 .align_items(Alignment::Center);
 
         if let Some(crop_error) = &self.crop_error {
-            crop_controls = crop_controls
-                .push(text(format!("Crop error! \n{}", crop_error)));
+            crop_controls =
+                crop_controls.push(text(format!("Crop error! \n{crop_error}")));
         }
 
         let mut controls = column![
@@ -222,9 +224,9 @@ impl Application for Example {
 
         if let Some(png_result) = &self.saved_png_path {
             let msg = match png_result {
-                Ok(path) => format!("Png saved as: {:?}!", path),
+                Ok(path) => format!("Png saved as: {path:?}!"),
                 Err(msg) => {
-                    format!("Png could not be saved due to:\n{:?}", msg)
+                    format!("Png could not be saved due to:\n{msg:?}")
                 }
             };
 
@@ -254,7 +256,7 @@ impl Application for Example {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        subscription::events_with(|event, status| {
+        event::listen_with(|event, status| {
             if let event::Status::Captured = status {
                 return None;
             }
@@ -274,15 +276,20 @@ impl Application for Example {
 
 async fn save_to_png(screenshot: Screenshot) -> Result<String, PngError> {
     let path = "screenshot.png".to_string();
-    img::save_buffer(
-        &path,
-        &screenshot.bytes,
-        screenshot.size.width,
-        screenshot.size.height,
-        ColorType::Rgba8,
-    )
-    .map(|_| path)
-    .map_err(|err| PngError(format!("{:?}", err)))
+
+    tokio::task::spawn_blocking(move || {
+        img::save_buffer(
+            &path,
+            &screenshot.bytes,
+            screenshot.size.width,
+            screenshot.size.height,
+            ColorType::Rgba8,
+        )
+        .map(|_| path)
+        .map_err(|err| PngError(format!("{err:?}")))
+    })
+    .await
+    .expect("Blocking task to finish")
 }
 
 #[derive(Clone, Debug)]
@@ -294,10 +301,7 @@ fn numeric_input(
 ) -> Element<'_, Option<u32>> {
     text_input(
         placeholder,
-        &value
-            .as_ref()
-            .map(ToString::to_string)
-            .unwrap_or_else(String::new),
+        &value.as_ref().map(ToString::to_string).unwrap_or_default(),
     )
     .on_input(move |text| {
         if text.is_empty() {

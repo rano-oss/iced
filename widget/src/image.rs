@@ -14,10 +14,10 @@ use crate::core::{
 
 use std::hash::Hash;
 
+pub use image::{FilterMethod, Handle};
+
 #[cfg(feature = "a11y")]
 use std::borrow::Cow;
-
-pub use image::Handle;
 
 /// Creates a new [`Viewer`] with the given image `Handle`.
 pub fn viewer<Handle>(handle: Handle) -> Viewer<Handle> {
@@ -48,6 +48,7 @@ pub struct Image<'a, Handle> {
     width: Length,
     height: Length,
     content_fit: ContentFit,
+    filter_method: FilterMethod,
     border_radius: [f32; 4],
     phantom_data: std::marker::PhantomData<&'a ()>,
 }
@@ -67,6 +68,7 @@ impl<'a, Handle> Image<'a, Handle> {
             width: Length::Shrink,
             height: Length::Shrink,
             content_fit: ContentFit::Contain,
+            filter_method: FilterMethod::default(),
             border_radius: [0.0; 4],
             phantom_data: std::marker::PhantomData,
         }
@@ -93,11 +95,50 @@ impl<'a, Handle> Image<'a, Handle> {
     /// Sets the [`ContentFit`] of the [`Image`].
     ///
     /// Defaults to [`ContentFit::Contain`]
-    pub fn content_fit(self, content_fit: ContentFit) -> Self {
-        Self {
-            content_fit,
-            ..self
-        }
+    pub fn content_fit(mut self, content_fit: ContentFit) -> Self {
+        self.content_fit = content_fit;
+        self
+    }
+
+    /// Sets the [`FilterMethod`] of the [`Image`].
+    pub fn filter_method(mut self, filter_method: FilterMethod) -> Self {
+        self.filter_method = filter_method;
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the name of the [`Button`].
+    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description_widget<T: iced_accessibility::Describes>(
+        mut self,
+        description: &T,
+    ) -> Self {
+        self.description = Some(iced_accessibility::Description::Id(
+            description.description(),
+        ));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the description of the [`Button`].
+    pub fn description(mut self, description: impl Into<Cow<'a, str>>) -> Self {
+        self.description =
+            Some(iced_accessibility::Description::Text(description.into()));
+        self
+    }
+
+    #[cfg(feature = "a11y")]
+    /// Sets the label of the [`Button`].
+    pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
+        self.label =
+            Some(label.label().into_iter().map(|l| l.into()).collect());
+        self
     }
 
     #[cfg(feature = "a11y")]
@@ -144,7 +185,7 @@ pub fn layout<Renderer, Handle>(
     width: Length,
     height: Length,
     content_fit: ContentFit,
-    border_radius: [f32; 4],
+    _border_radius: [f32; 4],
 ) -> layout::Node
 where
     Renderer: image::Renderer<Handle = Handle>,
@@ -183,6 +224,7 @@ pub fn draw<Renderer, Handle>(
     layout: Layout<'_>,
     handle: &Handle,
     content_fit: ContentFit,
+    filter_method: FilterMethod,
     border_radius: [f32; 4],
 ) where
     Renderer: image::Renderer<Handle = Handle>,
@@ -206,14 +248,19 @@ pub fn draw<Renderer, Handle>(
             ..bounds
         };
 
-        renderer.draw(handle.clone(), drawing_bounds + offset, border_radius);
+        renderer.draw(
+            handle.clone(),
+            filter_method,
+            drawing_bounds + offset,
+            border_radius,
+        );
     };
 
     if adjusted_fit.width > bounds.width || adjusted_fit.height > bounds.height
     {
         renderer.with_layer(bounds, render);
     } else {
-        render(renderer)
+        render(renderer);
     }
 }
 
@@ -233,6 +280,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -262,8 +310,9 @@ where
             layout,
             &self.handle,
             self.content_fit,
+            self.filter_method,
             self.border_radius,
-        )
+        );
     }
 
     #[cfg(feature = "a11y")]
@@ -271,7 +320,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: mouse::Cursor,
+        _cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},

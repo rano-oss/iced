@@ -6,8 +6,9 @@ use iced::widget::{
     button, column, container, horizontal_space, progress_bar, radio, row,
     scrollable, slider, text, vertical_space,
 };
-use iced::{executor, theme, Alignment, Color};
-use iced::{Application, Command, Element, Length, Settings, Theme};
+use iced::{executor, theme, Alignment, Application, Color};
+use iced::{Command, Element, Length, Settings, Theme};
+use iced_core::id::Id;
 
 use once_cell::sync::Lazy;
 
@@ -392,14 +393,14 @@ impl scrollable::StyleSheet for ScrollbarCustomStyle {
                 background: style
                     .active(&theme::Scrollable::default())
                     .background,
-                border_radius: 0.0.into(),
+                border_radius: 2.0.into(),
                 border_width: 0.0,
-                border_color: Default::default(),
+                border_color: Color::default(),
                 scroller: Scroller {
                     color: Color::from_rgb8(250, 85, 134),
-                    border_radius: 0.0.into(),
+                    border_radius: 2.0.into(),
                     border_width: 0.0,
-                    border_color: Default::default(),
+                    border_color: Color::default(),
                 },
             }
         } else {

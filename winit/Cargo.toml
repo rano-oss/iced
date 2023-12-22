@@ -1,19 +1,17 @@
 [package]
 name = "iced_winit"
-version = "0.10.0"
-authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
-edition = "2021"
-description = "A winit runtime for Iced"
-license = "MIT"
-repository = "https://github.com/iced-rs/iced"
-documentation = "https://docs.rs/iced_winit"
-keywords = ["gui", "ui", "graphics", "interface", "widgets"]
-categories = ["gui"]
+description = "A runtime for iced on top of winit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [features]
 default = ["x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"]
-trace = ["tracing", "tracing-core", "tracing-subscriber"]
-chrome-trace = ["trace", "tracing-chrome"]
 debug = ["iced_runtime/debug"]
 system = ["sysinfo"]
 application = []
@@ -21,61 +19,28 @@ x11 = ["winit/x11"]
 wayland = ["winit/wayland"]
 wayland-dlopen = ["winit/wayland-dlopen"]
 wayland-csd-adwaita = ["winit/wayland-csd-adwaita"]
+multi-window = ["iced_runtime/multi-window"]
 a11y = ["iced_accessibility", "iced_runtime/a11y"]
 
 [dependencies]
-window_clipboard = "0.3"
-log = "0.4"
-thiserror = "1.0"
-raw-window-handle = "0.5"
+iced_graphics.workspace = true
+iced_runtime.workspace = true
+iced_style.workspace = true
+iced_accessibility.workspace = true
+iced_accessibility.optional = true
+iced_accessibility.features = ["accesskit_winit"]
+log.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+window_clipboard.workspace = true
+winit.workspace = true
 
-[dependencies.winit]
-git = "https://github.com/pop-os/winit.git"
-branch = "master"
+sysinfo.workspace = true
+sysinfo.optional = true
 
-[dependencies.iced_runtime]
-version = "0.1"
-path = "../runtime"
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi.workspace = true
 
-[dependencies.iced_graphics]
-version = "0.9"
-path = "../graphics"
-
-[dependencies.iced_style]
-version = "0.9"
-path = "../style"
-
-[dependencies.tracing]
-version = "0.1.37"
-optional = true
-features = ["std"]
-
-[dependencies.tracing-core]
-version = "0.1.30"
-optional = true
-
-[dependencies.tracing-subscriber]
-version = "0.3.16"
-optional = true
-features = ["registry"]
-
-[dependencies.tracing-chrome]
-version = "0.7.0"
-optional = true
-
-[target.'cfg(target_os = "windows")'.dependencies.winapi]
-version = "0.3.6"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
-version = "0.3"
-features = ["Document", "Window"]
-
-[dependencies.sysinfo]
-version = "0.28"
-optional = true
-
-[dependencies.iced_accessibility]
-version = "0.1.0"
-path = "../accessibility"
-optional = true
-features = ["accesskit_winit"]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys.workspace = true
+web-sys.features = ["Document", "Window"]

@@ -1,6 +1,6 @@
 //! Let your users split regions of your application and organize layout dynamically.
 //!
-//! [![Pane grid - Iced](https://thumbs.gfycat.com/MixedFlatJellyfish-small.gif)](https://gfycat.com/mixedflatjellyfish)
+//! ![Pane grid - Iced](https://iced.rs/examples/pane_grid.gif)
 //!
 //! # Example
 //! The [`pane_grid` example] showcases how to use a [`PaneGrid`] with resizing,
@@ -49,7 +49,7 @@ use crate::core::{
 /// A collection of panes distributed using either vertical or horizontal splits
 /// to completely fill the space available.
 ///
-/// [![Pane grid - Iced](https://thumbs.gfycat.com/FrailFreshAiredaleterrier-small.gif)](https://gfycat.com/frailfreshairedaleterrier)
+/// ![Pane grid - Iced](https://iced.rs/examples/pane_grid.gif)
 ///
 /// This distribution of space is common in tiling window managers (like
 /// [`awesome`](https://awesomewm.org/), [`i3`](https://i3wm.org/), or even
@@ -280,10 +280,12 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         layout(
+            tree,
             renderer,
             limits,
             self.contents.layout(),
@@ -291,7 +293,9 @@ where
             self.height,
             self.spacing,
             self.contents.iter(),
-            |content, renderer, limits| content.layout(renderer, limits),
+            |content, tree, renderer, limits| {
+                content.layout(tree, renderer, limits)
+            },
         )
     }
 
@@ -309,7 +313,7 @@ where
                 .zip(layout.children())
                 .for_each(|(((_pane, content), state), layout)| {
                     content.operate(state, layout, renderer, operation);
-                })
+                });
         });
     }
 
@@ -437,7 +441,7 @@ where
                     tree, renderer, theme, style, layout, cursor, rectangle,
                 );
             },
-        )
+        );
     }
 
     fn overlay<'b>(
@@ -476,6 +480,7 @@ where
 
 /// Calculates the [`Layout`] of a [`PaneGrid`].
 pub fn layout<Renderer, T>(
+    tree: &mut Tree,
     renderer: &Renderer,
     limits: &layout::Limits,
     node: &Node,
@@ -483,19 +488,26 @@ pub fn layout<Renderer, T>(
     height: Length,
     spacing: f32,
     contents: impl Iterator<Item = (Pane, T)>,
-    layout_content: impl Fn(T, &Renderer, &layout::Limits) -> layout::Node,
+    layout_content: impl Fn(
+        T,
+        &mut Tree,
+        &Renderer,
+        &layout::Limits,
+    ) -> layout::Node,
 ) -> layout::Node {
     let limits = limits.width(width).height(height);
     let size = limits.resolve(Size::ZERO);
 
     let regions = node.pane_regions(spacing, size);
     let children = contents
-        .filter_map(|(pane, content)| {
+        .zip(tree.children.iter_mut())
+        .filter_map(|((pane, content), tree)| {
             let region = regions.get(&pane)?;
             let size = Size::new(region.width, region.height);
 
             let mut node = layout_content(
                 content,
+                tree,
                 renderer,
                 &layout::Limits::new(size, size),
             );
@@ -599,11 +611,10 @@ pub fn update<'a, Message, T: Draggable>(
                         } else {
                             let dropped_region = contents
                                 .zip(layout.children())
-                                .filter_map(|(target, layout)| {
+                                .find_map(|(target, layout)| {
                                     layout_region(layout, cursor_position)
                                         .map(|region| (target, region))
-                                })
-                                .next();
+                                });
 
                             match dropped_region {
                                 Some(((target, _), region))
@@ -1144,21 +1155,19 @@ pub struct ResizeEvent {
  * Helpers
  */
 fn hovered_split<'a>(
-    splits: impl Iterator<Item = (&'a Split, &'a (Axis, Rectangle, f32))>,
+    mut splits: impl Iterator<Item = (&'a Split, &'a (Axis, Rectangle, f32))>,
     spacing: f32,
     cursor_position: Point,
 ) -> Option<(Split, Axis, Rectangle)> {
-    splits
-        .filter_map(|(split, (axis, region, ratio))| {
-            let bounds = axis.split_line_bounds(*region, *ratio, spacing);
+    splits.find_map(|(split, (axis, region, ratio))| {
+        let bounds = axis.split_line_bounds(*region, *ratio, spacing);
 
-            if bounds.contains(cursor_position) {
-                Some((*split, *axis, bounds))
-            } else {
-                None
-            }
-        })
-        .next()
+        if bounds.contains(cursor_position) {
+            Some((*split, *axis, bounds))
+        } else {
+            None
+        }
+    })
 }
 
 /// The visible contents of the [`PaneGrid`]

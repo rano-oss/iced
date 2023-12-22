@@ -1,31 +1,27 @@
 [package]
 name = "iced_runtime"
-version = "0.1.1"
-authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
-edition = "2021"
-description = "A renderer-agnostic runtime for Iced"
-license = "MIT"
-repository = "https://github.com/iced-rs/iced"
+description = "A renderer-agnostic runtime for iced"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [features]
 debug = []
+multi-window = []
 a11y = ["iced_accessibility", "iced_core/a11y"]
 wayland = ["iced_accessibility?/accesskit_unix", "iced_core/wayland", "sctk"]
 
 [dependencies]
-thiserror = "1"
-sctk = { package = "smithay-client-toolkit", git = "https://github.com/smithay/client-toolkit", rev = "2e9bf9f", optional = true }
-
-[dependencies.iced_core]
-version = "0.10"
-path = "../core"
-
-[dependencies.iced_futures]
-version = "0.7"
-path = "../futures"
-features = ["thread-pool"]
-
-[dependencies.iced_accessibility]
-version = "0.1.0"
-path = "../accessibility"
-optional = true
+iced_core.workspace = true
+iced_futures.workspace = true
+iced_futures.features = ["thread-pool"]
+sctk.workspace = true
+sctk.optional = true
+thiserror.workspace = true
+iced_accessibility.workspace = true
+iced_accessibility.optional = true

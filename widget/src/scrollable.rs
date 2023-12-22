@@ -1,5 +1,6 @@
 //! Navigate an endless amount of content with a scrollbar.
 use iced_runtime::core::widget::Id;
+#[cfg(feature = "a11y")]
 use std::borrow::Cow;
 
 use crate::core::event::{self, Event};
@@ -63,7 +64,7 @@ where
             label: None,
             width: Length::Shrink,
             height: Length::Shrink,
-            direction: Default::default(),
+            direction: Direction::default(),
             content: content.into(),
             on_scroll: None,
             style: Default::default(),
@@ -93,7 +94,6 @@ where
         self.direction = direction;
         self
     }
-
     /// Sets a function to call when the [`Scrollable`] is scrolled.
     ///
     /// The function takes the [`Viewport`] of the [`Scrollable`]
@@ -169,7 +169,7 @@ impl Direction {
         match self {
             Self::Horizontal(properties) => Some(properties),
             Self::Both { horizontal, .. } => Some(horizontal),
-            _ => None,
+            Self::Vertical(_) => None,
         }
     }
 
@@ -178,7 +178,7 @@ impl Direction {
         match self {
             Self::Vertical(properties) => Some(properties),
             Self::Both { vertical, .. } => Some(vertical),
-            _ => None,
+            Self::Horizontal(_) => None,
         }
     }
 }
@@ -282,6 +282,7 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -292,7 +293,11 @@ where
             self.height,
             &self.direction,
             |renderer, limits| {
-                self.content.as_widget().layout(renderer, limits)
+                self.content.as_widget().layout(
+                    &mut tree.children[0],
+                    renderer,
+                    limits,
+                )
             },
         )
     }
@@ -386,9 +391,9 @@ where
                     layout,
                     cursor,
                     viewport,
-                )
+                );
             },
-        )
+        );
     }
 
     fn mouse_interaction(
@@ -447,7 +452,7 @@ where
         &self,
         layout: Layout<'_>,
         state: &Tree,
-        cursor_position: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},
@@ -458,12 +463,12 @@ where
         let child_tree = &state.children[0];
         let child_tree = self.content.as_widget().a11y_nodes(
             child_layout,
-            child_tree,
-            cursor_position,
+            &child_tree,
+            cursor,
         );
 
         let window = layout.bounds();
-        let is_hovered = cursor_position.is_over(window);
+        let is_hovered = cursor.is_over(window);
         let Rectangle {
             x,
             y,
@@ -510,8 +515,12 @@ where
         let mut scrollbar_node = NodeBuilder::new(Role::ScrollBar);
         if matches!(state.state, tree::State::Some(_)) {
             let state = state.state.downcast_ref::<State>();
-            let scrollbars =
-                Scrollbars::new(state, self.direction, window, content_bounds);
+            let scrollbars = Scrollbars::new(
+                state,
+                self.direction,
+                content_bounds,
+                content_bounds,
+            );
             for (window, content, offset, scrollbar) in scrollbars
                 .x
                 .iter()
@@ -523,7 +532,7 @@ where
                 }))
             {
                 let scrollbar_bounds = scrollbar.total_bounds;
-                let is_hovered = cursor_position.is_over(scrollbar_bounds);
+                let is_hovered = cursor.is_over(scrollbar_bounds);
                 let Rectangle {
                     x,
                     y,
@@ -648,7 +657,7 @@ pub fn layout<Renderer>(
 /// accordingly.
 pub fn update<Message>(
     state: &mut State,
-    event: Event,
+    #[allow(unused_mut)] mut event: Event,
     layout: Layout<'_>,
     cursor: mouse::Cursor,
     clipboard: &mut dyn Clipboard,
@@ -689,6 +698,14 @@ pub fn update<Message>(
         };
 
         let translation = state.translation(direction, bounds, content_bounds);
+
+        #[cfg(feature = "wayland")]
+        if let Event::PlatformSpecific(
+            iced_runtime::core::event::PlatformSpecific::Wayland(e),
+        ) = &mut event
+        {
+            e.translate(translation);
+        }
 
         update_content(
             event.clone(),
@@ -1219,7 +1236,7 @@ impl operation::Scrollable for State {
     }
 
     fn scroll_to(&mut self, offset: AbsoluteOffset) {
-        State::scroll_to(self, offset)
+        State::scroll_to(self, offset);
     }
 }
 
@@ -1301,6 +1318,16 @@ impl Viewport {
 
         RelativeOffset { x, y }
     }
+
+    /// Returns the bounds of the current [`Viewport`].
+    pub fn bounds(&self) -> Rectangle {
+        self.bounds
+    }
+
+    /// Returns the content bounds of the current [`Viewport`].
+    pub fn content_bounds(&self) -> Rectangle {
+        self.content_bounds
+    }
 }
 
 impl State {
@@ -1343,7 +1370,7 @@ impl State {
                 (self.offset_y.absolute(bounds.height, content_bounds.height)
                     - delta.y)
                     .clamp(0.0, content_bounds.height - bounds.height),
-            )
+            );
         }
 
         if bounds.width < content_bounds.width {
@@ -1504,15 +1531,15 @@ impl Scrollbars {
 
             let ratio = bounds.height / content_bounds.height;
             // min height for easier grabbing with super tall content
-            let scroller_height = (bounds.height * ratio).max(2.0);
-            let scroller_offset = translation.y * ratio;
+            let scroller_height = (scrollbar_bounds.height * ratio).max(2.0);
+            let scroller_offset =
+                translation.y * ratio * scrollbar_bounds.height / bounds.height;
 
             let scroller_bounds = Rectangle {
                 x: bounds.x + bounds.width
                     - total_scrollbar_width / 2.0
                     - scroller_width / 2.0,
-                y: (scrollbar_bounds.y + scroller_offset - x_scrollbar_height)
-                    .max(0.0),
+                y: (scrollbar_bounds.y + scroller_offset).max(0.0),
                 width: scroller_width,
                 height: scroller_height,
             };
@@ -1539,8 +1566,8 @@ impl Scrollbars {
 
             // Need to adjust the width of the horizontal scrollbar if the vertical scrollbar
             // is present
-            let scrollbar_y_width = show_scrollbar_y
-                .map_or(0.0, |v| v.width.max(v.scroller_width) + v.margin);
+            let scrollbar_y_width = y_scrollbar
+                .map_or(0.0, |scrollbar| scrollbar.total_bounds.width);
 
             let total_scrollbar_height =
                 width.max(scroller_width) + 2.0 * margin;
@@ -1565,12 +1592,12 @@ impl Scrollbars {
 
             let ratio = bounds.width / content_bounds.width;
             // min width for easier grabbing with extra wide content
-            let scroller_length = (bounds.width * ratio).max(2.0);
-            let scroller_offset = translation.x * ratio;
+            let scroller_length = (scrollbar_bounds.width * ratio).max(2.0);
+            let scroller_offset =
+                translation.x * ratio * scrollbar_bounds.width / bounds.width;
 
             let scroller_bounds = Rectangle {
-                x: (scrollbar_bounds.x + scroller_offset - scrollbar_y_width)
-                    .max(0.0),
+                x: (scrollbar_bounds.x + scroller_offset).max(0.0),
                 y: bounds.y + bounds.height
                     - total_scrollbar_height / 2.0
                     - scroller_width / 2.0,

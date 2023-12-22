@@ -10,6 +10,7 @@ use crate::core::{
     ContentFit, Element, Layout, Length, Rectangle, Size, Vector, Widget,
 };
 
+#[cfg(feature = "a11y")]
 use std::borrow::Cow;
 use std::path::PathBuf;
 
@@ -41,7 +42,7 @@ where
     content_fit: ContentFit,
     symbolic: bool,
     style: <Renderer::Theme as StyleSheet>::Style,
-    _phantom_data: std::marker::PhantomData<&'a ()>,
+    phantom_data: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a, Renderer> Svg<'a, Renderer>
@@ -65,7 +66,7 @@ where
             content_fit: ContentFit::Contain,
             symbolic: false,
             style: Default::default(),
-            _phantom_data: std::marker::PhantomData,
+            phantom_data: std::marker::PhantomData,
         }
     }
 
@@ -169,6 +170,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -254,7 +256,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        _cursor_position: mouse::Cursor,
+        _cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{NodeBuilder, NodeId, Rect, Role},

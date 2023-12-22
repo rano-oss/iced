@@ -1,4 +1,4 @@
-use crate::core::Font;
+use crate::core::{Font, Pixels};
 
 /// The settings of a [`Backend`].
 ///
@@ -10,15 +10,15 @@ pub struct Settings {
 
     /// The default size of text.
     ///
-    /// By default, it will be set to `14.0`.
-    pub default_text_size: f32,
+    /// By default, it will be set to `16.0`.
+    pub default_text_size: Pixels,
 }
 
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
             default_font: Font::default(),
-            default_text_size: 14.0,
+            default_text_size: Pixels(14.0),
         }
     }
 }

@@ -28,6 +28,7 @@ impl Pipeline {
     pub fn draw(
         &mut self,
         handle: &raster::Handle,
+        filter_method: raster::FilterMethod,
         bounds: Rectangle,
         pixels: &mut tiny_skia::PixmapMut<'_>,
         transform: tiny_skia::Transform,
@@ -40,6 +41,14 @@ impl Pipeline {
 
             let transform = transform.pre_scale(width_scale, height_scale);
 
+            let quality = match filter_method {
+                raster::FilterMethod::Linear => {
+                    tiny_skia::FilterQuality::Bilinear
+                }
+                raster::FilterMethod::Nearest => {
+                    tiny_skia::FilterQuality::Nearest
+                }
+            };
             let mut scratch;
 
             // Round the borders if a border radius is defined
@@ -64,7 +73,7 @@ impl Pipeline {
                 (bounds.y / height_scale) as i32,
                 image,
                 &tiny_skia::PixmapPaint {
-                    quality: tiny_skia::FilterQuality::Bilinear,
+                    quality,
                     ..Default::default()
                 },
                 transform,
@@ -105,14 +114,14 @@ impl Cache {
                 );
             }
 
-            entry.insert(Some(Entry {
+            let _ = entry.insert(Some(Entry {
                 width: image.width(),
                 height: image.height(),
                 pixels: buffer,
             }));
         }
 
-        self.hits.insert(id);
+        let _ = self.hits.insert(id);
         self.entries.get(&id).unwrap().as_ref().map(|entry| {
             tiny_skia::PixmapRef::from_bytes(
                 bytemuck::cast_slice(&entry.pixels),
@@ -136,7 +145,7 @@ struct Entry {
 }
 
 // https://users.rust-lang.org/t/how-to-trim-image-to-circle-image-without-jaggy/70374/2
-fn round(img: &mut tiny_skia::PixmapMut, radius: [u32; 4]) {
+fn round(img: &mut tiny_skia::PixmapMut<'_>, radius: [u32; 4]) {
     let (width, height) = (img.width(), img.height());
     assert!(radius[0] + radius[1] <= width);
     assert!(radius[3] + radius[2] <= width);
@@ -154,7 +163,7 @@ fn round(img: &mut tiny_skia::PixmapMut, radius: [u32; 4]) {
 }
 
 fn border_radius(
-    img: &mut tiny_skia::PixmapMut,
+    img: &mut tiny_skia::PixmapMut<'_>,
     r: u32,
     coordinates: impl Fn(u32, u32) -> (u32, u32),
 ) {
@@ -179,12 +188,13 @@ fn border_radius(
         ((width as usize * y as usize) + x as usize) * 4
     }
 
-    let clear_pixel = |img: &mut tiny_skia::PixmapMut, (x, y): (u32, u32)| {
+    let clear_pixel = |img: &mut tiny_skia::PixmapMut<'_>,
+                       (x, y): (u32, u32)| {
         let pixel = pixel_id(img.width(), (x, y));
         img.data_mut()[pixel..pixel + 4].copy_from_slice(&[0; 4]);
     };
 
-    let draw = |img: &mut tiny_skia::PixmapMut, alpha, x, y| {
+    let draw = |img: &mut tiny_skia::PixmapMut<'_>, alpha, x, y| {
         debug_assert!((1..=256).contains(&alpha));
         let pixel = pixel_id(img.width(), coordinates(r0 - x, r0 - y));
         let pixel_alpha = &mut img.data_mut()[pixel + 3];

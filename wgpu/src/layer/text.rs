@@ -1,10 +1,37 @@
 use crate::core::alignment;
 use crate::core::text;
-use crate::core::{Color, Font, Rectangle};
+use crate::core::{Color, Font, Pixels, Point, Rectangle};
+use crate::graphics;
+use crate::graphics::text::editor;
+use crate::graphics::text::paragraph;
 
-/// A paragraph of text.
-#[derive(Debug, Clone, Copy)]
-pub struct Text<'a> {
+/// A text primitive.
+#[derive(Debug, Clone)]
+pub enum Text<'a> {
+    /// A paragraph.
+    #[allow(missing_docs)]
+    Paragraph {
+        paragraph: paragraph::Weak,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    },
+    /// An editor.
+    #[allow(missing_docs)]
+    Editor {
+        editor: editor::Weak,
+        position: Point,
+        color: Color,
+        clip_bounds: Rectangle,
+    },
+    /// Some cached text.
+    Cached(Cached<'a>),
+    /// Some raw text.
+    Raw(graphics::text::Raw),
+}
+
+#[derive(Debug, Clone)]
+pub struct Cached<'a> {
     /// The content of the [`Text`].
     pub content: &'a str,
 
@@ -15,7 +42,7 @@ pub struct Text<'a> {
     pub color: Color,
 
     /// The size of the [`Text`] in logical pixels.
-    pub size: f32,
+    pub size: Pixels,
 
     /// The line height of the [`Text`].
     pub line_height: text::LineHeight,
@@ -31,4 +58,7 @@ pub struct Text<'a> {
 
     /// The shaping strategy of the text.
     pub shaping: text::Shaping,
+
+    /// The clip bounds of the text.
+    pub clip_bounds: Rectangle,
 }

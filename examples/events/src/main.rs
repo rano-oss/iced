@@ -1,9 +1,8 @@
 use iced::alignment;
+use iced::event::{self, Event};
 use iced::executor;
-use iced::subscription;
 use iced::widget::{button, checkbox, container, text, Column};
 use iced::window;
-use iced::Event;
 use iced::{
     Alignment, Application, Command, Element, Length, Settings, Subscription,
     Theme,
@@ -11,7 +10,10 @@ use iced::{
 
 pub fn main() -> iced::Result {
     Events::run(Settings {
-        exit_on_close_request: false,
+        window: window::Settings {
+            exit_on_close_request: false,
+            ..window::Settings::default()
+        },
         ..Settings::default()
     })
 }
@@ -55,8 +57,9 @@ impl Application for Events {
                 Command::none()
             }
             Message::EventOccurred(event) => {
-                if let Event::Window(window::Event::CloseRequested) = event {
-                    window::close()
+                if let Event::Window(id, window::Event::CloseRequested) = event
+                {
+                    window::close(id)
                 } else {
                     Command::none()
                 }
@@ -66,12 +69,12 @@ impl Application for Events {
 
                 Command::none()
             }
-            Message::Exit => window::close(),
+            Message::Exit => window::close(window::Id::MAIN),
         }
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        subscription::events().map(Message::EventOccurred)
+        event::listen().map(Message::EventOccurred)
     }
 
     fn view(&self) -> Element<Message> {

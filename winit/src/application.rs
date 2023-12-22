@@ -1,9 +1,8 @@
 //! Create interactive, native cross-platform applications.
 mod drag_resize;
-#[cfg(feature = "trace")]
-mod profiler;
 mod state;
 
+#[cfg(feature = "a11y")]
 use iced_graphics::core::widget::operation::focusable::focus;
 use iced_graphics::core::widget::operation::OperationWrapper;
 use iced_graphics::core::widget::Operation;
@@ -27,8 +26,8 @@ use crate::runtime::user_interface::{self, UserInterface};
 use crate::runtime::{Command, Debug};
 use crate::style::application::{Appearance, StyleSheet};
 use crate::{Clipboard, Error, Proxy, Settings};
-
 use futures::channel::mpsc;
+use futures::stream::StreamExt;
 
 use std::mem::ManuallyDrop;
 
@@ -148,9 +147,6 @@ where
     use futures::Future;
     use winit::event_loop::EventLoopBuilder;
 
-    #[cfg(feature = "trace")]
-    let _guard = Profiler::init();
-
     let mut debug = Debug::new();
     debug.startup_started();
 
@@ -179,16 +175,17 @@ where
     let target = settings.window.platform_specific.target.clone();
 
     let should_be_visible = settings.window.visible;
-    let builder = settings
-        .window
-        .into_builder(
-            &application.title(),
-            event_loop.primary_monitor(),
-            settings.id,
-        )
-        .with_visible(false);
+    let exit_on_close_request = settings.window.exit_on_close_request;
 
-    log::debug!("Window builder: {:#?}", builder);
+    let builder = conversion::window_settings(
+        settings.window,
+        &application.title(),
+        event_loop.primary_monitor(),
+        settings.id,
+    )
+    .with_visible(false);
+
+    log::debug!("Window builder: {builder:#?}");
 
     let window = builder
         .build(&event_loop)
@@ -205,7 +202,7 @@ where
         let body = document.body().unwrap();
 
         let target = target.and_then(|target| {
-            body.query_selector(&format!("#{}", target))
+            body.query_selector(&format!("#{target}"))
                 .ok()
                 .unwrap_or(None)
         });
@@ -224,7 +221,14 @@ where
         };
     }
 
-    let (compositor, renderer) = C::new(compositor_settings, Some(&window))?;
+    let compositor = C::new(compositor_settings, Some(&window))?;
+    let mut renderer = compositor.create_renderer();
+
+    for font in settings.fonts {
+        use crate::core::text::Renderer;
+
+        renderer.load_font(font);
+    }
 
     let (mut event_sender, event_receiver) = mpsc::unbounded();
     let (control_sender, mut control_receiver) = mpsc::unbounded();
@@ -242,7 +246,7 @@ where
             init_command,
             window,
             should_be_visible,
-            settings.exit_on_close_request,
+            exit_on_close_request,
             resize_border,
         );
 
@@ -322,7 +326,6 @@ async fn run_instance<A, E, C>(
     C: Compositor<Renderer = A::Renderer> + 'static,
     <A::Renderer as core::Renderer>::Theme: StyleSheet,
 {
-    use futures::stream::StreamExt;
     use winit::event;
     use winit::event_loop::ControlFlow;
 
@@ -383,6 +386,7 @@ async fn run_instance<A, E, C>(
     let mut events = Vec::new();
     let mut messages = Vec::new();
     let mut redraw_pending = false;
+    #[cfg(feature = "a11y")]
     let mut commands: Vec<Command<A::Message>> = Vec::new();
 
     #[cfg(feature = "a11y")]
@@ -500,7 +504,7 @@ async fn run_instance<A, E, C>(
                 // Then, we can use the `interface_state` here to decide if a redraw
                 // is needed right away, or simply wait until a specific time.
                 let redraw_event = Event::Window(
-                    window::Id::default(),
+                    window::Id::MAIN,
                     window::Event::RedrawRequested(Instant::now()),
                 );
 
@@ -584,9 +588,6 @@ async fn run_instance<A, E, C>(
                 };
             }
             event::Event::RedrawRequested(_) => {
-                #[cfg(feature = "trace")]
-                let _ = info_span!("Application", "FRAME").entered();
-
                 let physical_size = state.physical_size();
 
                 if physical_size.width == 0 || physical_size.height == 0 {
@@ -754,6 +755,7 @@ async fn run_instance<A, E, C>(
                 state.update(&window, &window_event, &mut debug);
 
                 if let Some(event) = conversion::window_event(
+                    window::Id::MAIN,
                     &window_event,
                     state.scale_factor(),
                     state.modifiers(),
@@ -805,25 +807,12 @@ pub fn build_user_interface<'a, A: Application>(
 where
     <A::Renderer as core::Renderer>::Theme: StyleSheet,
 {
-    #[cfg(feature = "trace")]
-    let view_span = info_span!("Application", "VIEW").entered();
-
     debug.view_started();
-    let mut view = application.view(Default::default());
-    view.as_widget_mut().diff(&mut core::widget::Tree::empty());
-
-    #[cfg(feature = "trace")]
-    let _ = view_span.exit();
+    let view = application.view();
     debug.view_finished();
-
-    #[cfg(feature = "trace")]
-    let layout_span = info_span!("Application", "LAYOUT").entered();
 
     debug.layout_started();
     let user_interface = UserInterface::build(view, size, cache, renderer);
-
-    #[cfg(feature = "trace")]
-    let _ = layout_span.exit();
     debug.layout_finished();
 
     user_interface
@@ -864,16 +853,10 @@ pub fn update<A: Application, C, E: Executor>(
     <A::Renderer as core::Renderer>::Theme: StyleSheet,
 {
     for message in messages.drain(..) {
-        #[cfg(feature = "trace")]
-        let update_span = info_span!("Application", "UPDATE").entered();
-
         debug.log_message(&message);
 
         debug.update_started();
         let command = runtime.enter(|| application.update(message));
-
-        #[cfg(feature = "trace")]
-        let _ = update_span.exit();
         debug.update_finished();
 
         run_command(
@@ -933,9 +916,10 @@ pub fn run_command<A, C, E>(
     for action in command.actions() {
         match action {
             command::Action::Future(future) => {
-                runtime.spawn(Box::pin(
-                    future.map(|e| UserEventWrapper::Message(e)),
-                ));
+                runtime.spawn(Box::pin(future.map(UserEventWrapper::Message)));
+            }
+            command::Action::Stream(stream) => {
+                runtime.run(Box::pin(stream.map(UserEventWrapper::Message)));
             }
             command::Action::Clipboard(action) => match action {
                 clipboard::Action::Read(tag) => {
@@ -950,50 +934,57 @@ pub fn run_command<A, C, E>(
                 }
             },
             command::Action::Window(action) => match action {
-                window::Action::Close => {
+                window::Action::Close(_id) => {
                     *should_exit = true;
                 }
-                window::Action::Drag => {
+                window::Action::Drag(_id) => {
                     let _res = window.drag_window();
                 }
-                window::Action::Resize(size) => {
+                window::Action::Spawn { .. } => {
+                    log::warn!(
+                        "Spawning a window is only available with \
+                        multi-window applications."
+                    );
+                }
+                window::Action::Resize(_id, size) => {
                     window.set_inner_size(winit::dpi::LogicalSize {
                         width: size.width,
                         height: size.height,
                     });
                 }
-                window::Action::FetchSize(callback) => {
-                    let size = window.inner_size();
+                window::Action::FetchSize(_id, callback) => {
+                    let size =
+                        window.inner_size().to_logical(window.scale_factor());
 
                     proxy
                         .send_event(UserEventWrapper::Message(callback(
                             Size::new(size.width, size.height),
                         )))
-                        .expect("Send message to event loop")
+                        .expect("Send message to event loop");
                 }
-                window::Action::Maximize(maximized) => {
+                window::Action::Maximize(_id, maximized) => {
                     window.set_maximized(maximized);
                 }
-                window::Action::Minimize(minimized) => {
+                window::Action::Minimize(_id, minimized) => {
                     window.set_minimized(minimized);
                 }
-                window::Action::Move { x, y } => {
+                window::Action::Move(_id, position) => {
                     window.set_outer_position(winit::dpi::LogicalPosition {
-                        x,
-                        y,
+                        x: position.x,
+                        y: position.y,
                     });
                 }
-                window::Action::ChangeMode(mode) => {
+                window::Action::ChangeMode(_id, mode) => {
                     window.set_visible(conversion::visible(mode));
                     window.set_fullscreen(conversion::fullscreen(
                         window.current_monitor(),
                         mode,
                     ));
                 }
-                window::Action::ChangeIcon(icon) => {
-                    window.set_window_icon(conversion::icon(icon))
+                window::Action::ChangeIcon(_id, icon) => {
+                    window.set_window_icon(conversion::icon(icon));
                 }
-                window::Action::FetchMode(tag) => {
+                window::Action::FetchMode(_id, tag) => {
                     let mode = if window.is_visible().unwrap_or(true) {
                         conversion::mode(window.fullscreen())
                     } else {
@@ -1004,31 +995,31 @@ pub fn run_command<A, C, E>(
                         .send_event(UserEventWrapper::Message(tag(mode)))
                         .expect("Send message to event loop");
                 }
-                window::Action::ToggleMaximize => {
-                    window.set_maximized(!window.is_maximized())
+                window::Action::ToggleMaximize(_id) => {
+                    window.set_maximized(!window.is_maximized());
                 }
-                window::Action::ToggleDecorations => {
+                window::Action::ToggleDecorations(_id) => {
                     window.set_decorations(!window.is_decorated());
                 }
-                window::Action::RequestUserAttention(user_attention) => {
+                window::Action::RequestUserAttention(_id, user_attention) => {
                     window.request_user_attention(
                         user_attention.map(conversion::user_attention),
                     );
                 }
-                window::Action::GainFocus => {
+                window::Action::GainFocus(_id) => {
                     window.focus_window();
                 }
-                window::Action::ChangeLevel(level) => {
-                    // window.set_window_level(conversion::window_level(level));
+                window::Action::ChangeLevel(_id, level) => {
+                    window.set_window_level(conversion::window_level(level));
                 }
-                window::Action::FetchId(tag) => {
+                window::Action::FetchId(_id, tag) => {
                     proxy
                         .send_event(UserEventWrapper::Message(tag(window
                             .id()
                             .into())))
                         .expect("Send message to event loop");
                 }
-                window::Action::Screenshot(tag) => {
+                window::Action::Screenshot(_id, tag) => {
                     let bytes = compositor.screenshot(
                         renderer,
                         surface,
@@ -1044,7 +1035,7 @@ pub fn run_command<A, C, E>(
                                 state.physical_size(),
                             ),
                         )))
-                        .expect("Send message to event loop.")
+                        .expect("Send message to event loop.");
                 }
             },
             command::Action::System(action) => match action {

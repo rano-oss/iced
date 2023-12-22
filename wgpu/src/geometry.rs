@@ -310,13 +310,11 @@ impl Frame {
     /// resulting glyphs will not be rotated or scaled properly.
     ///
     /// Additionally, all text will be rendered on top of all the layers of
-    /// a [`Canvas`]. Therefore, it is currently only meant to be used for
+    /// a `Canvas`. Therefore, it is currently only meant to be used for
     /// overlays, which is the most common use case.
     ///
     /// Support for vectorial text is planned, and should address all these
     /// limitations.
-    ///
-    /// [`Canvas`]: crate::widget::Canvas
     pub fn fill_text(&mut self, text: impl Into<Text>) {
         let text = text.into();
 
@@ -330,15 +328,17 @@ impl Frame {
             Point::new(transformed.x, transformed.y)
         };
 
+        let bounds = Rectangle {
+            x: position.x,
+            y: position.y,
+            width: f32::INFINITY,
+            height: f32::INFINITY,
+        };
+
         // TODO: Use vectorial text instead of primitive
         self.primitives.push(Primitive::Text {
             content: text.content,
-            bounds: Rectangle {
-                x: position.x,
-                y: position.y,
-                width: f32::INFINITY,
-                height: f32::INFINITY,
-            },
+            bounds,
             color: text.color,
             size: text.size,
             line_height: text.line_height,
@@ -346,6 +346,7 @@ impl Frame {
             horizontal_alignment: text.horizontal_alignment,
             vertical_alignment: text.vertical_alignment,
             shaping: text.shaping,
+            clip_bounds: Rectangle::with_size(Size::INFINITY),
         });
     }
 
@@ -444,11 +445,21 @@ impl Frame {
         self.transforms.current.is_identity = false;
     }
 
-    /// Applies a scaling to the current transform of the [`Frame`].
+    /// Applies a uniform scaling to the current transform of the [`Frame`].
     #[inline]
-    pub fn scale(&mut self, scale: f32) {
+    pub fn scale(&mut self, scale: impl Into<f32>) {
+        let scale = scale.into();
+
+        self.scale_nonuniform(Vector { x: scale, y: scale });
+    }
+
+    /// Applies a non-uniform scaling to the current transform of the [`Frame`].
+    #[inline]
+    pub fn scale_nonuniform(&mut self, scale: impl Into<Vector>) {
+        let scale = scale.into();
+
         self.transforms.current.raw =
-            self.transforms.current.raw.pre_scale(scale, scale);
+            self.transforms.current.raw.pre_scale(scale.x, scale.y);
         self.transforms.current.is_identity = false;
     }
 
@@ -472,7 +483,7 @@ impl Frame {
                                 },
                                 size: self.size,
                             }),
-                        ))
+                        ));
                     }
                 }
                 Buffer::Gradient(buffer) => {
@@ -485,7 +496,7 @@ impl Frame {
                                 },
                                 size: self.size,
                             }),
-                        ))
+                        ));
                     }
                 }
             }

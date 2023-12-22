@@ -12,8 +12,8 @@ use iced::{
         layer_surface::destroy_layer_surface,
         InitialSurface,
     },
-    widget::{column, container, dnd_listener, dnd_source, text},
-    window, Application, Color, Command, Element, Length, Theme,
+    widget::{self, column, container, dnd_listener, dnd_source, text},
+    window, Application, Color, Command, Element, Length, Subscription, Theme,
 };
 use iced_style::application;
 use sctk::reexports::client::protocol::wl_data_device_manager::DndAction;
@@ -99,7 +99,7 @@ impl Application for DndTest {
         )
     }
 
-    fn title(&self) -> String {
+    fn title(&self, id: window::Id) -> String {
         String::from("DndTest")
     }
 
@@ -160,8 +160,8 @@ impl Application for DndTest {
                         .map(|t| t.to_string())
                         .collect(),
                     DndAction::Move,
-                    window::Id(0),
-                    Some(DndIcon::Custom(window::Id(1))),
+                    window::Id::MAIN,
+                    Some(DndIcon::Custom(iced::window::Id::unique())),
                     Box::new(MyDndString(
                         self.current_text.chars().rev().collect::<String>(),
                     )),
@@ -173,7 +173,7 @@ impl Application for DndTest {
     }
 
     fn view(&self, id: window::Id) -> Element<Self::Message> {
-        if id == window::Id(1) {
+        if id != iced::window::Id::MAIN {
             return text(&self.current_text).into();
         }
         column![
@@ -191,7 +191,7 @@ impl Application for DndTest {
                 } else {
                     Default::default()
                 })
-                .padding(80)
+                .padding(20)
             )
             .on_enter(|_, mime_types: Vec<String>, _| {
                 if mime_types.iter().any(|mime_type| {
@@ -225,7 +225,7 @@ impl Application for DndTest {
                 } else {
                     Default::default()
                 })
-                .padding(80)
+                .padding(20)
             )
             .drag_threshold(5.0)
             .on_drag(|_| Message::StartDnd)
@@ -233,16 +233,6 @@ impl Application for DndTest {
             .on_cancelled(Message::SourceFinished)
         ]
         .into()
-    }
-
-    fn close_requested(&self, id: window::Id) -> Self::Message {
-        Message::Ignore
-    }
-
-    fn style(&self) -> <Self::Theme as application::StyleSheet>::Style {
-        <Self::Theme as application::StyleSheet>::Style::Custom(Box::new(
-            CustomTheme,
-        ))
     }
 }
 
@@ -256,20 +246,7 @@ impl container::StyleSheet for CustomTheme {
             border_color: Color::from_rgb(1.0, 0.0, 0.0),
             border_radius: 2.0.into(),
             border_width: 2.0,
-            background: Some(Color::from_rgb(1.0, 0.0, 0.0).into()),
             ..container::Appearance::default()
-        }
-    }
-}
-
-impl iced_style::application::StyleSheet for CustomTheme {
-    type Style = iced::Theme;
-
-    fn appearance(&self, style: &Self::Style) -> application::Appearance {
-        iced_style::application::Appearance {
-            background_color: Color::from_rgba(1.0, 0.0, 1.0, 1.0),
-            icon_color: Color::BLACK,
-            text_color: Color::from_rgb(0.0, 1.0, 0.0),
         }
     }
 }

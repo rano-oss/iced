@@ -107,11 +107,10 @@ where
     Renderer::Theme: container::StyleSheet + crate::text::StyleSheet,
 {
     fn children(&self) -> Vec<widget::Tree> {
-        vec![widget::Tree::new(&self.content)]
-    }
-
-    fn diff(&mut self, tree: &mut widget::Tree) {
-        tree.diff_children(std::slice::from_mut(&mut self.content))
+        vec![
+            widget::Tree::new(&self.content),
+            widget::Tree::new(&self.tooltip as &dyn Widget<Message, Renderer>),
+        ]
     }
 
     fn state(&self) -> widget::tree::State {
@@ -120,6 +119,13 @@ where
 
     fn tag(&self) -> widget::tree::Tag {
         widget::tree::Tag::of::<State>()
+    }
+
+    fn diff(&mut self, tree: &mut widget::Tree) {
+        tree.diff_children(&mut [
+            self.content.as_widget_mut(),
+            &mut self.tooltip,
+        ]);
     }
 
     fn width(&self) -> Length {
@@ -132,10 +138,13 @@ where
 
     fn layout(
         &self,
+        tree: &mut widget::Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.content.as_widget().layout(renderer, limits)
+        self.content
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn on_event(
@@ -151,10 +160,18 @@ where
     ) -> event::Status {
         let state = tree.state.downcast_mut::<State>();
 
+        let was_idle = *state == State::Idle;
+
         *state = cursor
             .position_over(layout.bounds())
             .map(|cursor_position| State::Hovered { cursor_position })
             .unwrap_or_default();
+
+        let is_idle = *state == State::Idle;
+
+        if was_idle != is_idle {
+            shell.invalidate_layout();
+        }
 
         self.content.as_widget_mut().on_event(
             &mut tree.children[0],
@@ -214,8 +231,10 @@ where
     ) -> Option<overlay::Element<'b, Message, Renderer>> {
         let state = tree.state.downcast_ref::<State>();
 
+        let mut children = tree.children.iter_mut();
+
         let content = self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
+            children.next().unwrap(),
             layout,
             renderer,
         );
@@ -225,6 +244,7 @@ where
                 layout.position(),
                 Box::new(Overlay {
                     tooltip: &self.tooltip,
+                    state: children.next().unwrap(),
                     cursor_position,
                     content_bounds: layout.bounds(),
                     snap_within_viewport: self.snap_within_viewport,
@@ -280,7 +300,7 @@ pub enum Position {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 enum State {
     #[default]
     Idle,
@@ -295,6 +315,7 @@ where
     Renderer::Theme: container::StyleSheet + widget::text::StyleSheet,
 {
     tooltip: &'b Text<'a, Renderer>,
+    state: &'b mut widget::Tree,
     cursor_position: Point,
     content_bounds: Rectangle,
     snap_within_viewport: bool,
@@ -311,15 +332,17 @@ where
     Renderer::Theme: container::StyleSheet + widget::text::StyleSheet,
 {
     fn layout(
-        &self,
+        &mut self,
         renderer: &Renderer,
         bounds: Size,
         position: Point,
+        _translation: Vector,
     ) -> layout::Node {
         let viewport = Rectangle::with_size(bounds);
 
         let text_layout = Widget::<(), Renderer>::layout(
             self.tooltip,
+            self.state,
             renderer,
             &layout::Limits::new(
                 Size::ZERO,
@@ -427,7 +450,7 @@ where
 
         Widget::<(), Renderer>::draw(
             self.tooltip,
-            &widget::Tree::empty(),
+            self.state,
             renderer,
             theme,
             &defaults,

@@ -1,3 +1,5 @@
+//! Platform specific actions defined for wayland
+
 use std::{fmt, marker::PhantomData};
 
 use iced_futures::MaybeSend;

@@ -33,8 +33,6 @@ use crate::{
 /// slider.
 /// - [`styling`], an example showcasing custom styling with a light and dark
 /// theme.
-/// - [`svg`], an application that renders the [Ghostscript Tiger] by leveraging
-/// the [`Svg` widget].
 /// - [`tour`], a simple UI tour that can run both on native platforms and the
 /// web!
 ///
@@ -46,12 +44,9 @@ use crate::{
 /// [`pane_grid`]: https://github.com/iced-rs/iced/tree/0.4/examples/pane_grid
 /// [`progress_bar`]: https://github.com/iced-rs/iced/tree/0.4/examples/progress_bar
 /// [`styling`]: https://github.com/iced-rs/iced/tree/0.4/examples/styling
-/// [`svg`]: https://github.com/iced-rs/iced/tree/0.4/examples/svg
 /// [`tour`]: https://github.com/iced-rs/iced/tree/0.4/examples/tour
-/// [`Canvas widget`]: crate::widget::Canvas
 /// [the overview]: index.html#overview
 /// [`iced_wgpu`]: https://github.com/iced-rs/iced/tree/0.4/wgpu
-/// [`Svg` widget]: crate::widget::Svg
 /// [Ghostscript Tiger]: https://commons.wikimedia.org/wiki/File:Ghostscript_Tiger.svg
 ///
 /// ## A simple "Hello, world!"
@@ -86,10 +81,6 @@ use crate::{
 ///     fn view(&self, _: Id) -> Element<Self::Message> {
 ///         "Hello, world!".into()
 ///     }
-///
-///     fn close_requested(&self, _: Id) -> Self::Message {
-///         unimplemented!()
-///     }
 /// }
 /// ```
 pub trait Sandbox {
@@ -117,9 +108,6 @@ pub trait Sandbox {
     ///
     /// These widgets can produce __messages__ based on user interaction.
     fn view(&self, id: Id) -> Element<'_, Self::Message>;
-
-    /// window was requested to close
-    fn close_requested(&self, id: Id) -> Self::Message;
 
     /// Returns the current [`Theme`] of the [`Sandbox`].
     ///
@@ -151,13 +139,6 @@ pub trait Sandbox {
         1.0
     }
 
-    /// Returns whether the [`Sandbox`] should be terminated.
-    ///
-    /// By default, it returns `false`.
-    fn should_exit(&self) -> bool {
-        false
-    }
-
     /// Runs the [`Sandbox`].
     ///
     /// On native platforms, this method will take control of the current thread
@@ -185,7 +166,7 @@ where
         (T::new(), Command::none())
     }
 
-    fn title(&self) -> String {
+    fn title(&self, _id: Id) -> String {
         T::title(self)
     }
 
@@ -195,7 +176,7 @@ where
         Command::none()
     }
 
-    fn theme(&self) -> Self::Theme {
+    fn theme(&self, _id: Id) -> Self::Theme {
         T::theme(self)
     }
 
@@ -207,12 +188,8 @@ where
         Subscription::none()
     }
 
-    fn scale_factor(&self) -> f64 {
+    fn scale_factor(&self, _id: Id) -> f64 {
         T::scale_factor(self)
-    }
-
-    fn should_exit(&self) -> bool {
-        T::should_exit(self)
     }
 
     /// Returns the widgets to display in the [`Sandbox`] window.
@@ -220,10 +197,5 @@ where
     /// These widgets can produce __messages__ based on user interaction.
     fn view(&self, id: Id) -> Element<'_, Self::Message> {
         T::view(self, id)
-    }
-
-    /// window was requested to close
-    fn close_requested(&self, id: Id) -> Self::Message {
-        T::close_requested(self, id)
     }
 }

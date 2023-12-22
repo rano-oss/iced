@@ -288,7 +288,6 @@ where
             window_node_id,
         };
         let node_id = window_node_id();
-        // let node_id_clone = node_id.clone();
         let event_list = self.a11y_events.clone();
         adapter::IcedSctkAdapter {
             adapter: Adapter::new(
@@ -808,8 +807,7 @@ where
                             sticky_exit_callback(
                                 IcedSctkEvent::SctkEvent(SctkEvent::WindowEvent {
                                     variant: WindowEventVariant::Created(object_id.clone(), id),
-                                    id: wl_surface.clone() 
-                                }),
+                                    id: wl_surface.clone() }),
                                 &self.state,
                                 &mut control_flow,
                                 &mut callback,
@@ -979,8 +977,7 @@ where
                                 sticky_exit_callback(
                                     IcedSctkEvent::SctkEvent(SctkEvent::PopupEvent {
                                         variant: crate::sctk_event::PopupEventVariant::Created(object_id.clone(), id),
-                                        toplevel_id, parent_id, id: wl_surface.clone() 
-                                    }),
+                                        toplevel_id, parent_id, id: wl_surface.clone() }),
                                     &self.state,
                                     &mut control_flow,
                                     &mut callback,

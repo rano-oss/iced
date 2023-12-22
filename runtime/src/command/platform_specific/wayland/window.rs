@@ -44,7 +44,7 @@ pub struct SctkWindowSettings {
 impl Default for SctkWindowSettings {
     fn default() -> Self {
         Self {
-            window_id: Id::default(),
+            window_id: Id::MAIN,
             app_id: Default::default(),
             title: Default::default(),
             parent: Default::default(),

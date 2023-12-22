@@ -1,5 +1,6 @@
 //! Show toggle controls using checkboxes.
 use iced_runtime::core::widget::Id;
+#[cfg(feature = "a11y")]
 use std::borrow::Cow;
 
 use crate::core::alignment;
@@ -9,12 +10,12 @@ use crate::core::mouse;
 use crate::core::renderer;
 use crate::core::text;
 use crate::core::touch;
-use crate::core::widget::Tree;
+use crate::core::widget;
+use crate::core::widget::tree::{self, Tree};
 use crate::core::{
-    id::Internal, Alignment, Clipboard, Element, Layout, Length, Pixels,
-    Rectangle, Shell, Widget,
+    id::Internal, Clipboard, Element, Layout, Length, Pixels, Rectangle, Shell,
+    Widget,
 };
-use crate::{Row, Text};
 
 pub use iced_style::checkbox::{Appearance, StyleSheet};
 
@@ -54,7 +55,7 @@ where
     width: Length,
     size: f32,
     spacing: f32,
-    text_size: Option<f32>,
+    text_size: Option<Pixels>,
     text_line_height: text::LineHeight,
     text_shaping: text::Shaping,
     font: Option<Renderer::Font>,
@@ -71,7 +72,7 @@ where
     const DEFAULT_SIZE: f32 = 20.0;
 
     /// The default spacing of a [`Checkbox`].
-    const DEFAULT_SPACING: f32 = 15.0;
+    const DEFAULT_SPACING: f32 = 10.0;
 
     /// Creates a new [`Checkbox`].
     ///
@@ -133,11 +134,11 @@ where
 
     /// Sets the text size of the [`Checkbox`].
     pub fn text_size(mut self, text_size: impl Into<Pixels>) -> Self {
-        self.text_size = Some(text_size.into().0);
+        self.text_size = Some(text_size.into());
         self
     }
 
-    /// Sets the text [`LineHeight`] of the [`Checkbox`].
+    /// Sets the text [`text::LineHeight`] of the [`Checkbox`].
     pub fn text_line_height(
         mut self,
         line_height: impl Into<text::LineHeight>,
@@ -152,9 +153,9 @@ where
         self
     }
 
-    /// Sets the [`Font`] of the text of the [`Checkbox`].
+    /// Sets the [`Renderer::Font`] of the text of the [`Checkbox`].
     ///
-    /// [`Font`]: crate::text::Renderer::Font
+    /// [`Renderer::Font`]: crate::core::text::Renderer
     pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
         self.font = Some(font.into());
         self
@@ -209,6 +210,14 @@ where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet + crate::text::StyleSheet,
 {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<widget::text::State<Renderer::Paragraph>>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(widget::text::State::<Renderer::Paragraph>::default())
+    }
+
     fn width(&self) -> Length {
         self.width
     }
@@ -219,26 +228,35 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        Row::<(), Renderer>::new()
-            .width(self.width)
-            .spacing(self.spacing)
-            .align_items(Alignment::Center)
-            .push(Row::new().width(self.size).height(self.size))
-            .push(
-                Text::new(&self.label)
-                    .font(self.font.unwrap_or_else(|| renderer.default_font()))
-                    .width(self.width)
-                    .size(
-                        self.text_size
-                            .unwrap_or_else(|| renderer.default_size()),
-                    )
-                    .line_height(self.text_line_height)
-                    .shaping(self.text_shaping),
-            )
-            .layout(renderer, limits)
+        layout::next_to_each_other(
+            &limits.width(self.width),
+            self.spacing,
+            |_| layout::Node::new(crate::core::Size::new(self.size, self.size)),
+            |limits| {
+                let state = tree
+                    .state
+                    .downcast_mut::<widget::text::State<Renderer::Paragraph>>();
+
+                widget::text::layout(
+                    state,
+                    renderer,
+                    limits,
+                    self.width,
+                    Length::Shrink,
+                    &self.label,
+                    self.text_line_height,
+                    self.text_size,
+                    self.font,
+                    alignment::Horizontal::Left,
+                    alignment::Vertical::Top,
+                    self.text_shaping,
+                )
+            },
+        )
     }
 
     fn on_event(
@@ -286,13 +304,13 @@ where
 
     fn draw(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let is_mouse_over = cursor.is_over(layout.bounds());
 
@@ -325,24 +343,24 @@ where
                 line_height,
                 shaping,
             } = &self.icon;
-            let size = size.unwrap_or(bounds.height * 0.7);
+            let size = size.unwrap_or(Pixels(bounds.height * 0.7));
 
             if self.is_checked {
-                renderer.fill_text(text::Text {
-                    content: &code_point.to_string(),
-                    font: *font,
-                    size,
-                    line_height: *line_height,
-                    bounds: Rectangle {
-                        x: bounds.center_x(),
-                        y: bounds.center_y(),
-                        ..bounds
+                renderer.fill_text(
+                    text::Text {
+                        content: &code_point.to_string(),
+                        font: *font,
+                        size,
+                        line_height: *line_height,
+                        bounds: bounds.size(),
+                        horizontal_alignment: alignment::Horizontal::Center,
+                        vertical_alignment: alignment::Vertical::Center,
+                        shaping: *shaping,
                     },
-                    color: custom_style.icon_color,
-                    horizontal_alignment: alignment::Horizontal::Center,
-                    vertical_alignment: alignment::Vertical::Center,
-                    shaping: *shaping,
-                });
+                    bounds.center(),
+                    custom_style.icon_color,
+                    *viewport,
+                );
             }
         }
 
@@ -353,16 +371,11 @@ where
                 renderer,
                 style,
                 label_layout,
-                &self.label,
-                self.text_size,
-                self.text_line_height,
-                self.font,
+                tree.state.downcast_ref(),
                 crate::text::Appearance {
                     color: custom_style.text_color,
                 },
-                alignment::Horizontal::Left,
-                alignment::Vertical::Center,
-                self.text_shaping,
+                viewport,
             );
         }
     }
@@ -373,7 +386,7 @@ where
         &self,
         layout: Layout<'_>,
         _state: &Tree,
-        cursor_position: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> iced_accessibility::A11yTree {
         use iced_accessibility::{
             accesskit::{
@@ -383,7 +396,7 @@ where
         };
 
         let bounds = layout.bounds();
-        let is_hovered = cursor_position.is_over(bounds);
+        let is_hovered = cursor.is_over(bounds);
         let Rectangle {
             x,
             y,
@@ -478,7 +491,7 @@ pub struct Icon<Font> {
     /// The unicode code point that will be used as the icon.
     pub code_point: char,
     /// Font size of the content.
-    pub size: Option<f32>,
+    pub size: Option<Pixels>,
     /// The line height of the icon.
     pub line_height: text::LineHeight,
     /// The shaping strategy of the icon.

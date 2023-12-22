@@ -71,7 +71,7 @@ pub struct SctkLayerSurfaceSettings {
 impl Default for SctkLayerSurfaceSettings {
     fn default() -> Self {
         Self {
-            id: Id::default(),
+            id: Id::MAIN,
             layer: Layer::Top,
             keyboard_interactivity: Default::default(),
             pointer_interactivity: true,

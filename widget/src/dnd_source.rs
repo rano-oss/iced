@@ -158,6 +158,7 @@ where
 
     fn layout(
         &self,
+        tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -169,7 +170,11 @@ where
             u32::MAX,
             u32::MAX,
             |renderer, limits| {
-                self.content.as_widget().layout(renderer, limits)
+                self.content.as_widget().layout(
+                    &mut tree.children[0],
+                    renderer,
+                    limits,
+                )
             },
         )
     }
@@ -259,7 +264,7 @@ where
             return event::Status::Captured;
         }
 
-        let mut state = tree.state.downcast_mut::<State>();
+        let state = tree.state.downcast_mut::<State>();
 
         if matches!(
             event,

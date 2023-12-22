@@ -11,7 +11,7 @@ use crate::mouse;
 use crate::renderer;
 use crate::widget::Operation;
 use crate::widget::{OperationOutputWrapper, Tree};
-use crate::{Clipboard, Layout, Point, Rectangle, Shell, Size};
+use crate::{Clipboard, Layout, Point, Rectangle, Shell, Size, Vector};
 
 /// An interactive component that can be displayed on top of other widgets.
 pub trait Overlay<Message, Renderer>
@@ -25,10 +25,11 @@ where
     ///
     /// [`Node`]: layout::Node
     fn layout(
-        &self,
+        &mut self,
         renderer: &Renderer,
         bounds: Size,
         position: Point,
+        translation: Vector,
     ) -> layout::Node;
 
     /// Draws the [`Overlay`] using the associated `Renderer`.
@@ -41,7 +42,7 @@ where
         cursor: mouse::Cursor,
     );
 
-    /// Applies a [`widget::Operation`] to the [`Overlay`].
+    /// Applies an [`Operation`] to the [`Overlay`].
     fn operate(
         &mut self,
         _layout: Layout<'_>,

@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 use std::num::NonZeroU32;
 
 pub struct Compositor<Theme> {
+    settings: Settings,
     _theme: PhantomData<Theme>,
 }
 
@@ -28,10 +29,16 @@ impl<Theme> crate::graphics::Compositor for Compositor<Theme> {
     fn new<W: HasRawWindowHandle + HasRawDisplayHandle>(
         settings: Self::Settings,
         _compatible_window: Option<&W>,
-    ) -> Result<(Self, Self::Renderer), Error> {
-        let (compositor, backend) = new(settings);
+    ) -> Result<Self, Error> {
+        Ok(new(settings))
+    }
 
-        Ok((compositor, Renderer::new(backend)))
+    fn create_renderer(&self) -> Self::Renderer {
+        Renderer::new(
+            Backend::new(),
+            self.settings.default_font,
+            self.settings.default_text_size,
+        )
     }
 
     fn create_surface<W: HasRawWindowHandle + HasRawDisplayHandle>(
@@ -40,6 +47,7 @@ impl<Theme> crate::graphics::Compositor for Compositor<Theme> {
         width: u32,
         height: u32,
     ) -> Surface {
+        #[allow(unsafe_code)]
         let window = unsafe {
             softbuffer::Surface::new(
                 &softbuffer::Context::new(window)
@@ -119,13 +127,11 @@ impl<Theme> crate::graphics::Compositor for Compositor<Theme> {
     }
 }
 
-pub fn new<Theme>(settings: Settings) -> (Compositor<Theme>, Backend) {
-    (
-        Compositor {
-            _theme: PhantomData,
-        },
-        Backend::new(settings),
-    )
+pub fn new<Theme>(settings: Settings) -> Compositor<Theme> {
+    Compositor {
+        settings,
+        _theme: PhantomData,
+    }
 }
 
 pub fn present<T: AsRef<str>>(
@@ -177,10 +183,10 @@ pub fn present<T: AsRef<str>>(
     surface
         .window
         .resize(
-            NonZeroU32::new(physical_size.width as u32)
-                .ok_or_else(|| compositor::SurfaceError::InvalidDimensions)?,
-            NonZeroU32::new(physical_size.height as u32)
-                .ok_or_else(|| compositor::SurfaceError::InvalidDimensions)?,
+            NonZeroU32::new(physical_size.width)
+                .ok_or(compositor::SurfaceError::InvalidDimensions)?,
+            NonZeroU32::new(physical_size.height)
+                .ok_or(compositor::SurfaceError::InvalidDimensions)?,
         )
         .map_err(|_| compositor::SurfaceError::Resize)?;
     if let Ok(mut b) = surface.window.buffer_mut() {

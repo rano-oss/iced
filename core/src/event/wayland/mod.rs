@@ -49,3 +49,20 @@ pub enum Event {
     /// Input Method Keyboard Event
     InputMethodKeyboard(InputMethodKeyboardEvent),
 }
+
+impl Event {
+    /// Translate the event by some vector
+    pub fn translate(&mut self, vector: crate::vector::Vector) {
+        match self {
+            Event::DndOffer(DndOfferEvent::Enter { x, y, .. }) => {
+                *x += vector.x as f64;
+                *y += vector.y as f64;
+            }
+            Event::DndOffer(DndOfferEvent::Motion { x, y }) => {
+                *x += vector.x as f64;
+                *y += vector.y as f64;
+            }
+            _ => {}
+        }
+    }
+}

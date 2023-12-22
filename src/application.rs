@@ -1,5 +1,4 @@
 //! Build interactive cross-platform applications.
-use iced_core::window::Id;
 
 use crate::{Command, Element, Executor, Settings, Subscription};
 
@@ -25,8 +24,6 @@ pub use crate::style::application::{Appearance, StyleSheet};
 /// # Examples
 /// [The repository has a bunch of examples] that use the [`Application`] trait:
 ///
-/// - [`clock`], an application that uses the [`Canvas`] widget to draw a clock
-/// and its hands to display the current time.
 /// - [`download_progress`], a basic application that asynchronously downloads
 /// a dummy file of 100 MB and tracks the download progress.
 /// - [`events`], a log of native events displayed using a conditional
@@ -35,8 +32,6 @@ pub use crate::style::application::{Appearance, StyleSheet};
 /// by [John Horton Conway].
 /// - [`pokedex`], an application that displays a random Pokédex entry (sprite
 /// included!) by using the [PokéAPI].
-/// - [`solar_system`], an animated solar system drawn using the [`Canvas`] widget
-/// and showcasing how to compose different transforms.
 /// - [`stopwatch`], a watch with start/stop and reset buttons showcasing how
 /// to listen to time.
 /// - [`todos`], a todos tracker inspired by [TodoMVC].
@@ -51,7 +46,6 @@ pub use crate::style::application::{Appearance, StyleSheet};
 /// [`stopwatch`]: https://github.com/iced-rs/iced/tree/0.10/examples/stopwatch
 /// [`todos`]: https://github.com/iced-rs/iced/tree/0.10/examples/todos
 /// [`Sandbox`]: crate::Sandbox
-/// [`Canvas`]: crate::widget::Canvas
 /// [PokéAPI]: https://pokeapi.co/
 /// [TodoMVC]: http://todomvc.com/
 ///

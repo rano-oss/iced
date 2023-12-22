@@ -1,3 +1,5 @@
+//! Wayland specific actions
+
 use std::fmt::Debug;
 
 use iced_futures::MaybeSend;

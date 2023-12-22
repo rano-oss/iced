@@ -168,6 +168,7 @@ where
 
     fn layout(
         &self,
+        _tree: &mut Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
@@ -221,7 +222,7 @@ where
             &self.range,
             theme,
             &self.style,
-        )
+        );
     }
 
     fn mouse_interaction(
@@ -443,7 +444,7 @@ pub fn draw<T, R>(
                     border_color: Color::TRANSPARENT,
                 },
                 if auto_angle {
-                    gradient.angle = Radians::from(Degrees(90.0));
+                    gradient.angle = Radians::from(Degrees(180.0));
                     gradient
                 } else {
                     gradient
