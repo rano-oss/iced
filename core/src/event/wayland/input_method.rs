@@ -68,9 +68,7 @@ pub struct KeyEvent {
 }
 
 /// The state of keyboard modifiers
-///
 /// Each field of this indicates whether a specified modifier is active.
-///
 /// Depending on the modifier, the modifier key may currently be pressed or toggled.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Modifiers {
@@ -87,7 +85,6 @@ pub struct Modifiers {
     pub caps_lock: bool,
 
     /// The "logo" key
-    ///
     /// Also known as the "windows" or "super" key on a keyboard.
     #[doc(alias = "windows")]
     #[doc(alias = "super")]
