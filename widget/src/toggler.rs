@@ -1,4 +1,5 @@
 //! Show toggle controls using togglers.
+use std::borrow::Cow;
 
 use crate::core::alignment;
 use crate::core::event;
