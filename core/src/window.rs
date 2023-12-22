@@ -19,7 +19,3 @@ pub use position::Position;
 pub use redraw_request::RedrawRequest;
 pub use settings::Settings;
 pub use user_attention::UserAttention;
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// The identifier of a generic window.
-pub struct Id(pub u128);

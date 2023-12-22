@@ -14,10 +14,6 @@ keywords.workspace = true
 a11y = ["iced_accessibility"]
 wayland = ["iced_accessibility?/accesskit_unix", "sctk"]
 
-[features]
-a11y = ["iced_accessibility"]
-wayland = ["iced_accessibility?/accesskit_unix", "sctk"]
-
 [dependencies]
 bitflags.workspace = true
 log.workspace = true
@@ -28,11 +24,6 @@ sctk.workspace = true
 sctk.optional = true
 palette.workspace = true
 palette.optional = true
-
-[dependencies.serde]
-version = "1"
-optional = true
-features = ["serde_derive"]
 
 [dependencies.serde]
 version = "1"

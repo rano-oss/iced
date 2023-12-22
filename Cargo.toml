@@ -172,6 +172,7 @@ unicode-segmentation = "1.0"
 wasm-bindgen-futures = "0.4"
 wasm-timer = "0.2"
 wayland-protocols = { version = "0.31.0", features = [ "staging"]}
+wayland-protocols-misc = { version = "0.2.0"}
 web-sys = "=0.3.64"
 wgpu = "0.18"
 winapi = "0.3"

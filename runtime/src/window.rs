@@ -181,10 +181,3 @@ pub fn screenshot<Message>(
         Box::new(f),
     )))
 }
-
-/// Captures a [`Screenshot`] from the window.
-pub fn screenshot<Message>(
-    f: impl FnOnce(Screenshot) -> Message + Send + 'static,
-) -> Command<Message> {
-    Command::single(command::Action::Window(Action::Screenshot(Box::new(f))))
-}

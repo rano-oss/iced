@@ -283,7 +283,7 @@ fn build_user_interface<'a, P: Program>(
     debug: &mut Debug,
 ) -> UserInterface<'a, P::Message, P::Renderer> {
     debug.view_started();
-    let view = program.view(id);
+    let view = program.view();
     debug.view_finished();
 
     debug.layout_started();

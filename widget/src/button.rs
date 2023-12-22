@@ -19,8 +19,6 @@ use crate::core::{
     Rectangle, Shell, Vector, Widget,
 };
 use iced_renderer::core::widget::{operation, OperationOutputWrapper};
-
-use iced_renderer::core::widget::{operation, OperationOutputWrapper};
 pub use iced_style::button::{Appearance, StyleSheet};
 
 /// A generic widget that produces a message when pressed.
@@ -184,12 +182,6 @@ where
     pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
         self.label =
             Some(label.label().into_iter().map(|l| l.into()).collect());
-        self
-    }
-
-    /// Sets the [`Id`] of the [`Button`].
-    pub fn id(mut self, id: Id) -> Self {
-        self.id = id;
         self
     }
 
