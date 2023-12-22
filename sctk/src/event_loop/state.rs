@@ -11,8 +11,8 @@ use crate::{
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        LayerSurfaceEventVariant,
-        PopupEventVariant, SctkEvent, WindowEventVariant,
+        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent,
+        WindowEventVariant,
     },
 };
 
@@ -84,14 +84,12 @@ use crate::{
     handlers::input_method::{InputMethodManager, InputMethodPopup},
     sctk_event::InputMethodPopupEventVariant,
 };
+#[cfg(feature = "input_method")]
+use wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2;
 #[cfg(feature = "virtual_keyboard")]
 use crate::handlers::virtual_keyboard::VirtualKeyboardManager;
-    
-#[cfg(any(feature = "input_method", feature = "virtual_keyboard"))]
-use wayland_protocols_misc::{
-    zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2,
-    zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
-};
+#[cfg(feature = "virtual_keyboard"))]
+use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1;
 
 #[derive(Debug)]
 pub(crate) struct SctkSeat {
