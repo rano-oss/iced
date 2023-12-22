@@ -88,7 +88,7 @@ use crate::{
 use wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2;
 #[cfg(feature = "virtual_keyboard")]
 use crate::handlers::virtual_keyboard::VirtualKeyboardManager;
-#[cfg(feature = "virtual_keyboard"))]
+#[cfg(feature = "virtual_keyboard")]
 use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1;
 
 #[derive(Debug)]
