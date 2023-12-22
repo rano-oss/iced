@@ -40,7 +40,7 @@ pub enum Action<T> {
     /// input method
     InputMethod(input_method::Action<T>),
     /// input method popup
-    InputMethodPopup(input_method_popup::Action<T>)
+    InputMethodPopup(input_method_popup::Action<T>),
 }
 
 impl<T> Action<T> {
@@ -89,9 +89,10 @@ impl<T> Debug for Action<T> {
             }
             Self::InputMethod(arg0) => {
                 f.debug_tuple("InputMethod").field(arg0).finish()
-            },
-            Self::InputMethodPopup(arg0) => 
-                f.debug_tuple("InputMethodPopup").field(arg0).finish(),
+            }
+            Self::InputMethodPopup(arg0) => {
+                f.debug_tuple("InputMethodPopup").field(arg0).finish()
+            }
         }
     }
 }

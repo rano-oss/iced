@@ -1,8 +1,6 @@
 //! Display an interactive selector of a single value from a range of values.
 //!
 //! A [`Slider`] has some local [`State`].
-#[cfg(feature = "a11y")]
-use std::borrow::Cow;
 use crate::core::event::{self, Event};
 use crate::core::layout;
 use crate::core::mouse;
@@ -14,6 +12,8 @@ use crate::core::{
     Clipboard, Color, Element, Layout, Length, Pixels, Point, Rectangle, Shell,
     Size, Widget,
 };
+#[cfg(feature = "a11y")]
+use std::borrow::Cow;
 
 use std::ops::RangeInclusive;
 

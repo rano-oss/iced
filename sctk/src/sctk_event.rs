@@ -306,7 +306,7 @@ pub enum KeyboardEventVariant {
 pub enum InputMethodEventVariant {
     Activate,
     Deactivate,
-    SurroundingText{
+    SurroundingText {
         text: String,
         cursor: u32,
         anchor: u32,
@@ -327,7 +327,7 @@ pub enum InputMethodKeyboardEventVariant {
 #[derive(Debug, Clone)]
 pub enum InputMethodPopupEventVariant {
     Created(ObjectId, SurfaceId),
-     /// Scale Factor
+    /// Scale Factor
     ScaleFactorChanged(f64, Option<WpViewport>),
     Size(u32, u32),
 }
@@ -506,14 +506,20 @@ impl SctkEvent {
                 .into_iter()
                 .collect(), // TODO Ashley: conversion
             },
-            SctkEvent::InputMethodEvent {
-                variant,
-            } => match variant {
+            SctkEvent::InputMethodEvent { variant } => match variant {
                 InputMethodEventVariant::Activate => Default::default(),
                 InputMethodEventVariant::Deactivate => Default::default(),
-                InputMethodEventVariant::SurroundingText { text:_, cursor:_, anchor:_ } => Default::default(),
-                InputMethodEventVariant::TextChangeCause(_) => Default::default(),
-                InputMethodEventVariant::ContentType(_, _) => Default::default(),
+                InputMethodEventVariant::SurroundingText {
+                    text: _,
+                    cursor: _,
+                    anchor: _,
+                } => Default::default(),
+                InputMethodEventVariant::TextChangeCause(_) => {
+                    Default::default()
+                }
+                InputMethodEventVariant::ContentType(_, _) => {
+                    Default::default()
+                }
                 InputMethodEventVariant::Done => Default::default(),
             },
             SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
@@ -583,16 +589,16 @@ impl SctkEvent {
                 }
                 InputMethodKeyboardEventVariant::Release(ke) => {
                     keysym_to_vkey(ke.keysym.raw())
-                    .map(|k| {
-                        iced_runtime::core::Event::Keyboard(
-                            keyboard::Event::KeyReleased {
-                                key_code: k,
-                                modifiers: modifiers_to_native(*modifiers),
-                            },
-                        )
-                    })
-                    .into_iter()
-                    .collect()
+                        .map(|k| {
+                            iced_runtime::core::Event::Keyboard(
+                                keyboard::Event::KeyReleased {
+                                    key_code: k,
+                                    modifiers: modifiers_to_native(*modifiers),
+                                },
+                            )
+                        })
+                        .into_iter()
+                        .collect()
                 }
                 InputMethodKeyboardEventVariant::Modifiers(
                     new_mods,
@@ -1127,11 +1133,19 @@ impl SctkEvent {
                 .into_iter()
                 .collect()
             }
-            SctkEvent::InputMethodPopupEvent { id:_, variant } => match variant {
-                InputMethodPopupEventVariant::Created(_,_) => Default::default(),
-                InputMethodPopupEventVariant::ScaleFactorChanged(_, _) => Default::default(),
-                InputMethodPopupEventVariant::Size(_, _) => Default::default(),
-            },
+            SctkEvent::InputMethodPopupEvent { id: _, variant } => {
+                match variant {
+                    InputMethodPopupEventVariant::Created(_, _) => {
+                        Default::default()
+                    }
+                    InputMethodPopupEventVariant::ScaleFactorChanged(_, _) => {
+                        Default::default()
+                    }
+                    InputMethodPopupEventVariant::Size(_, _) => {
+                        Default::default()
+                    }
+                }
+            }
         }
     }
 }

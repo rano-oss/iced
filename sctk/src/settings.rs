@@ -1,6 +1,6 @@
 use iced_runtime::command::platform_specific::wayland::{
-    layer_surface::SctkLayerSurfaceSettings, window::SctkWindowSettings, 
     input_method_popup::InputMethodPopupSettings,
+    layer_surface::SctkLayerSurfaceSettings, window::SctkWindowSettings,
 };
 
 #[derive(Debug)]

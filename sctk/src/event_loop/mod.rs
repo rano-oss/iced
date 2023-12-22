@@ -11,16 +11,15 @@ use crate::{
     conversion,
     dpi::LogicalSize,
     handlers::{
-        activation::IcedRequestData,
-        input_method::InputMethodManager,
+        activation::IcedRequestData, input_method::InputMethodManager,
         virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant,
-        PopupEventVariant, SctkEvent, StartCause, WindowEventVariant, 
-        InputMethodPopupEventVariant,
+        DndOfferEvent, IcedSctkEvent, InputMethodPopupEventVariant,
+        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
+        WindowEventVariant,
     },
     settings,
 };
@@ -476,7 +475,11 @@ where
                         variant: PopupEventVariant::ScaleFactorChanged(..),
                         ..
                     }
-                    | SctkEvent::InputMethodPopupEvent { variant: InputMethodPopupEventVariant::ScaleFactorChanged(..), ..}
+                    | SctkEvent::InputMethodPopupEvent {
+                        variant:
+                            InputMethodPopupEventVariant::ScaleFactorChanged(..),
+                        ..
+                    }
                     | SctkEvent::WindowEvent {
                         variant: WindowEventVariant::ScaleFactorChanged(..),
                         ..

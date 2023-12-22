@@ -1,7 +1,5 @@
 //! Show toggle controls using togglers.
 
-#[cfg(feature = "a11y")]
-use std::borrow::Cow;
 use crate::core::alignment;
 use crate::core::event;
 use crate::core::layout;
@@ -16,6 +14,8 @@ use crate::core::{
     Rectangle, Shell, Widget,
 };
 use crate::{Row, Text};
+#[cfg(feature = "a11y")]
+use std::borrow::Cow;
 
 pub use crate::style::toggler::{Appearance, StyleSheet};
 

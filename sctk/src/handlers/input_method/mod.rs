@@ -11,8 +11,8 @@ use sctk::reexports::calloop::LoopHandle;
 use sctk::reexports::client::globals::{BindError, GlobalList};
 use sctk::reexports::client::protocol::wl_keyboard::KeymapFormat;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
-use sctk::reexports::client::Dispatch;
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
+use sctk::reexports::client::Dispatch;
 use sctk::reexports::client::{
     delegate_dispatch, Connection, Proxy, QueueHandle,
 };
@@ -134,8 +134,10 @@ impl<T: 'static> Dispatch<ZwpInputMethodV2, InputMethod, SctkState<T>>
                 cursor,
                 anchor,
             } => state.sctk_events.push(SctkEvent::InputMethodEvent {
-                variant: InputMethodEventVariant::SurroundingText{
-                    text, cursor, anchor,
+                variant: InputMethodEventVariant::SurroundingText {
+                    text,
+                    cursor,
+                    anchor,
                 },
             }),
             zwp_input_method_v2::Event::TextChangeCause { cause } => {
@@ -254,13 +256,19 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
         _keyboard: &ZwpInputMethodKeyboardGrabV2,
         keymap: keyboard::Keymap<'_>,
     ) {
-        self.seats.iter().for_each(|seat|{
+        self.seats.iter().for_each(|seat| {
             if let Some(vk) = &seat.virtual_keyboard {
-                let mut file = tempfile::tempfile().expect("tempfile cannot be set");
-                let keymap = keymap.as_string(); 
-                file.write_all(keymap.as_bytes()).expect("Tempfile not writeable");
+                let mut file =
+                    tempfile::tempfile().expect("tempfile cannot be set");
+                let keymap = keymap.as_string();
+                file.write_all(keymap.as_bytes())
+                    .expect("Tempfile not writeable");
                 file.flush().expect("Tempfile not flushable");
-                vk.keymap(KeymapFormat::XkbV1.into(), file.as_fd(), keymap.len() as u32);
+                vk.keymap(
+                    KeymapFormat::XkbV1.into(),
+                    file.as_fd(),
+                    keymap.len() as u32,
+                );
             }
         });
     }
@@ -268,8 +276,8 @@ impl<T: 'static> InputMethodKeyboardHandler for SctkState<T> {
 
 delegate_input_method_keyboard!(@<T: 'static> SctkState<T>);
 
-impl <T> SctkState<T>
-where 
+impl<T> SctkState<T>
+where
     T: 'static + Debug,
 {
     pub fn commit(&self) {
@@ -286,60 +294,81 @@ where
             im.commit_string(string)
         }
     }
-    
-    pub fn set_preedit_string(&self, string: String, cursor_begin: i32, cursor_end: i32) {
+
+    pub fn set_preedit_string(
+        &self,
+        string: String,
+        cursor_begin: i32,
+        cursor_end: i32,
+    ) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
             im.set_preedit_string(string, cursor_begin, cursor_end)
         }
     }
-    
-    pub fn delete_surrounding_text(&self, before_length: u32, after_length: u32) {
+
+    pub fn delete_surrounding_text(
+        &self,
+        before_length: u32,
+        after_length: u32,
+    ) {
         let seat = self.seats.first().expect("seat not present");
         if let Some(im) = seat.input_method.as_ref() {
             im.delete_surrounding_text(before_length, after_length)
         }
     }
 
-    pub fn get_input_method_popup(&mut self, settings: InputMethodPopupSettings) -> (window::Id, WlSurface) {
-        let wl_surface = self.compositor_state.create_surface(&self.queue_handle);
+    pub fn get_input_method_popup(
+        &mut self,
+        settings: InputMethodPopupSettings,
+    ) -> (window::Id, WlSurface) {
+        let wl_surface =
+            self.compositor_state.create_surface(&self.queue_handle);
         wl_surface.commit();
-        let wp_viewport = self.viewporter_state.as_ref().map(|state| {
-            state.get_viewport(&wl_surface, &self.queue_handle)
+        let wp_viewport = self
+            .viewporter_state
+            .as_ref()
+            .map(|state| state.get_viewport(&wl_surface, &self.queue_handle));
+        let wp_fractional_scale = self
+            .fractional_scaling_manager
+            .as_ref()
+            .map(|fsm| fsm.fractional_scaling(&wl_surface, &self.queue_handle));
+        self.input_method_popup = Some(InputMethodPopup {
+            // id: settings.id,
+            wl_surface: wl_surface.clone(),
+            popup_role: None,
+            wp_viewport,
+            scale_factor: None,
+            wp_fractional_scale,
         });
-        let wp_fractional_scale =
-            self.fractional_scaling_manager.as_ref().map(|fsm| {
-                fsm.fractional_scaling(&wl_surface, &self.queue_handle)
-            });
-        self.input_method_popup = Some(
-            InputMethodPopup{
-                // id: settings.id,
-                wl_surface: wl_surface.clone(),
-                popup_role: None,
-                wp_viewport,
-                scale_factor: None,
-                wp_fractional_scale,
-            }
-        );
-        (settings.id,wl_surface)
+        (settings.id, wl_surface)
     }
 
     pub fn show_input_method_popup(&mut self) {
         let seat = self.seats.first().expect("seat not present");
-        let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
+        let popup_state = self
+            .input_method_popup
+            .as_mut()
+            .expect("Input Method popup not present");
         if popup_state.popup_role.is_none() {
             popup_state.popup_role = seat.input_method.as_ref().map(|im| {
-                im.get_input_popup_surface(&popup_state.wl_surface, &self.queue_handle, popup_state.clone())
+                im.get_input_popup_surface(
+                    &popup_state.wl_surface,
+                    &self.queue_handle,
+                    popup_state.clone(),
+                )
             });
         }
     }
 
     pub fn hide_input_method_popup(&mut self) {
-        let popup_state = self.input_method_popup.as_mut().expect("Input Method popup not present");
+        let popup_state = self
+            .input_method_popup
+            .as_mut()
+            .expect("Input Method popup not present");
         if let Some(role) = &popup_state.popup_role {
             role.destroy();
             popup_state.popup_role = None;
-
         }
     }
 }

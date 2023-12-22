@@ -13,8 +13,8 @@ use crate::{
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent,
-        WindowEventVariant, InputMethodPopupEventVariant,
+        InputMethodPopupEventVariant, LayerSurfaceEventVariant,
+        PopupEventVariant, SctkEvent, WindowEventVariant,
     },
 };
 
@@ -406,16 +406,18 @@ impl<T> SctkState<T> {
             }
             input_method_popup.scale_factor = Some(scale_factor);
             if legacy {
-                input_method_popup.wl_surface.set_buffer_scale(scale_factor as _);
+                input_method_popup
+                    .wl_surface
+                    .set_buffer_scale(scale_factor as _);
             }
-            self.compositor_updates.push(
-                SctkEvent::InputMethodPopupEvent { 
+            self.compositor_updates
+                .push(SctkEvent::InputMethodPopupEvent {
                     variant: InputMethodPopupEventVariant::ScaleFactorChanged(
                         scale_factor,
-                        input_method_popup.wp_viewport.clone()), 
-                    id: input_method_popup.wl_surface.clone() 
-                }
-            )
+                        input_method_popup.wp_viewport.clone(),
+                    ),
+                    id: input_method_popup.wl_surface.clone(),
+                })
         }
 
         if let Some(popup) = self
