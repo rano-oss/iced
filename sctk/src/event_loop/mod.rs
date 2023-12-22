@@ -6,18 +6,24 @@ pub mod state;
 
 #[cfg(feature = "a11y")]
 use crate::application::SurfaceIdWrapper;
+#[cfg(feature = "input_method")]
+use crate::{
+    handlers::input_method::InputMethodManager,
+    sctk_event::InputMethodPopupEventVariant,
+};
+#[cfg(feature = "virtual_keyboard")]
+use crate::handlers::virtual_keyboard::VirtualKeyboardManager;
 use crate::{
     application::Event,
     conversion,
     dpi::LogicalSize,
     handlers::{
-        activation::IcedRequestData, input_method::InputMethodManager,
-        virtual_keyboard::VirtualKeyboardManager,
+        activation::IcedRequestData, 
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DndOfferEvent, IcedSctkEvent, InputMethodPopupEventVariant,
+        DndOfferEvent, IcedSctkEvent,
         LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
         WindowEventVariant,
     },
@@ -165,6 +171,7 @@ where
                     (None, None)
                 }
             };
+        #[cfg(feature = "input_method")]
         let input_method_manager = match InputMethodManager::new(&globals, &qh)
         {
             Ok(m) => Some(m),
@@ -173,7 +180,7 @@ where
                 None
             }
         };
-
+        #[cfg(feature = "virtual_keyboard")]
         let virtual_keyboard_manager =
             match VirtualKeyboardManager::new(&globals, &qh) {
                 Ok(m) => Some(m),
@@ -220,7 +227,6 @@ where
                 layer_surfaces: Vec::new(),
                 popups: Vec::new(),
                 lock_surfaces: Vec::new(),
-                input_method_popup: None,
                 dnd_source: None,
                 _kbd_focus: None,
                 sctk_events: Vec::new(),
@@ -232,7 +238,11 @@ where
                 fractional_scaling_manager,
                 viewporter_state,
                 compositor_updates: Default::default(),
+                #[cfg(feature = "input_method")]
+                input_method_popup: None,
+                #[cfg(feature = "input_method")]
                 input_method_manager,
+                #[cfg(feature = "virtual_keyboard")]
                 virtual_keyboard_manager,
             },
             _features: Default::default(),
@@ -475,13 +485,14 @@ where
                         variant: PopupEventVariant::ScaleFactorChanged(..),
                         ..
                     }
-                    | SctkEvent::InputMethodPopupEvent {
-                        variant:
-                            InputMethodPopupEventVariant::ScaleFactorChanged(..),
-                        ..
-                    }
                     | SctkEvent::WindowEvent {
                         variant: WindowEventVariant::ScaleFactorChanged(..),
+                        ..
+                    } => true,
+                    #[cfg(feature = "input_method")]
+                    SctkEvent::InputMethodPopupEvent {
+                        variant:
+                            InputMethodPopupEventVariant::ScaleFactorChanged(..),
                         ..
                     } => true,
                     // ignore other events that shouldn't be in this buffer
@@ -1339,6 +1350,7 @@ where
                             }
                         }
                     }
+                    #[cfg(feature = "virtual_keyboard")]
                     Event::VirtualKeyboard(action) => {
                         match action.inner {
                             platform_specific::wayland::virtual_keyboard::ActionInner::KeyPressed(key_event) => self.state.press_key(key_event),
@@ -1346,6 +1358,7 @@ where
                             platform_specific::wayland::virtual_keyboard::ActionInner::Modifiers(raw_modifiers) => self.state.update_modifiers(raw_modifiers.into()),
                         }
                     },
+                    #[cfg(feature = "input_method")]
                     Event::InputMethod(action) => {
                         match action.inner {
                             platform_specific::wayland::input_method::ActionInner::Commit => self.state.commit(),
@@ -1356,6 +1369,7 @@ where
                                 self.state.delete_surrounding_text(before_length, after_length),
                         }
                     },
+                    #[cfg(feature = "input_method")]
                     Event::InputMethodPopup(action) => {
                         match action {
                             platform_specific::wayland::input_method_popup::Action::Popup { settings, _phantom } => {

@@ -334,7 +334,6 @@ where
             .as_ref()
             .map(|fsm| fsm.fractional_scaling(&wl_surface, &self.queue_handle));
         self.input_method_popup = Some(InputMethodPopup {
-            // id: settings.id,
             wl_surface: wl_surface.clone(),
             popup_role: None,
             wp_viewport,

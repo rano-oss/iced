@@ -7,7 +7,7 @@ use std::{fmt, marker::PhantomData};
 /// Popup creation details
 #[derive(Debug, Clone)]
 pub struct InputMethodPopupSettings {
-    /// XXX must be unique, id of the popup
+    /// Id of the popup
     pub id: Id,
     /// Limits of the window size
     pub size_limits: Limits,
@@ -19,12 +19,8 @@ impl Default for InputMethodPopupSettings {
     fn default() -> Self {
         Self {
             id: Id::default(),
-            size_limits: Limits::NONE
-                .min_height(1.0)
-                .min_width(1.0)
-                .max_width(1920.0)
-                .max_height(1080.0),
-            size: (256, 256),
+            size_limits: Limits::NONE,
+            size: (1, 1),
         }
     }
 }

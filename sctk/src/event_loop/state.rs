@@ -7,13 +7,11 @@ use crate::{
     application::Event,
     dpi::LogicalSize,
     handlers::{
-        input_method::{InputMethodManager, InputMethodPopup},
-        virtual_keyboard::VirtualKeyboardManager,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        InputMethodPopupEventVariant, LayerSurfaceEventVariant,
+        LayerSurfaceEventVariant,
         PopupEventVariant, SctkEvent, WindowEventVariant,
     },
 };
@@ -81,6 +79,15 @@ use wayland_protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
     viewporter::client::wp_viewport::WpViewport,
 };
+#[cfg(feature = "input_method")]
+use crate::{
+    handlers::input_method::{InputMethodManager, InputMethodPopup},
+    sctk_event::InputMethodPopupEventVariant,
+};
+#[cfg(feature = "virtual_keyboard")]
+use crate::handlers::virtual_keyboard::VirtualKeyboardManager;
+    
+#[cfg(any(feature = "input_method", feature = "virtual_keyboard"))]
 use wayland_protocols_misc::{
     zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2,
     zwp_virtual_keyboard_v1::client::zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
@@ -99,7 +106,9 @@ pub(crate) struct SctkSeat {
     pub(crate) _modifiers: Modifiers,
     pub(crate) data_device: DataDevice,
     pub(crate) icon: Option<CursorIcon>,
+    #[cfg(feature = "virtual_keyboard")]
     pub(crate) virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
+    #[cfg(feature = "input_method")]
     pub(crate) input_method: Option<ZwpInputMethodV2>,
 }
 
@@ -288,7 +297,6 @@ pub struct SctkState<T> {
     pub(crate) layer_surfaces: Vec<SctkLayerSurface<T>>,
     pub(crate) popups: Vec<SctkPopup<T>>,
     pub(crate) lock_surfaces: Vec<SctkLockSurface>,
-    pub(crate) input_method_popup: Option<InputMethodPopup>,
     pub(crate) dnd_source: Option<Dnd<T>>,
     pub(crate) _kbd_focus: Option<WlSurface>,
 
@@ -328,7 +336,11 @@ pub struct SctkState<T> {
     pub(crate) session_lock_state: SessionLockState,
     pub(crate) session_lock: Option<SessionLock>,
     pub(crate) token_ctr: u32,
+    #[cfg(feature = "input_method")]
     pub(crate) input_method_manager: Option<InputMethodManager<T>>,
+    #[cfg(feature = "input_method")]
+    pub(crate) input_method_popup: Option<InputMethodPopup>,
+    #[cfg(feature = "virtual_keyboard")]
     pub(crate) virtual_keyboard_manager: Option<VirtualKeyboardManager<T>>,
 }
 
@@ -399,7 +411,7 @@ impl<T> SctkState<T> {
                 id: window.window.wl_surface().clone(),
             });
         }
-
+        #[cfg(feature = "input_method")]
         if let Some(input_method_popup) = self.input_method_popup.as_mut() {
             if legacy && input_method_popup.wp_fractional_scale.is_some() {
                 return;
