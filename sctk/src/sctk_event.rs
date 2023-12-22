@@ -4,10 +4,10 @@ use crate::{
         keysym_to_vkey, modifiers_to_native, pointer_axis_to_native,
         pointer_button_to_native,
     },
-    dpi::PhysicalSize,
-    handlers::input_method::keyboard::RawModifiers,
+    dpi::PhysicalSize
 };
-
+#[cfg(feature = "input_method")]
+use crate::handlers::input_method::keyboard::RawModifiers;
 use iced_futures::core::event::{
     wayland::{LayerEvent, PopupEvent, SessionLockEvent},
     PlatformSpecific,
@@ -42,13 +42,13 @@ use sctk::{
     },
 };
 use std::{collections::HashMap, time::Instant};
+#[cfg(feature = "input_method")]
 use wayland_backend::protocol::WEnum;
-use wayland_protocols::wp::{
-    text_input::zv3::client::zwp_text_input_v3::{
-        ChangeCause, ContentHint, ContentPurpose,
-    },
-    viewporter::client::wp_viewport::WpViewport,
+#[cfg(feature = "input_method")]
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
+    ChangeCause, ContentHint, ContentPurpose,
 };
+use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 
 pub enum IcedSctkEvent<T> {
     /// Emitted when new events arrive from the OS to be processed.
@@ -149,13 +149,15 @@ pub enum SctkEvent {
         kbd_id: WlKeyboard,
         seat_id: WlSeat,
     },
+    #[cfg(feature = "input_method")]
     InputMethodEvent {
         variant: InputMethodEventVariant,
-        // input_method_id: ZwpInputMethodV2,
     },
+    #[cfg(feature = "input_method")]
     InputMethodKeyboardEvent {
         variant: InputMethodKeyboardEventVariant,
     },
+    #[cfg(feature = "input_method")]
     InputMethodPopupEvent {
         variant: InputMethodPopupEventVariant,
         id: WlSurface,
@@ -302,6 +304,7 @@ pub enum KeyboardEventVariant {
     Modifiers(Modifiers),
 }
 
+#[cfg(feature = "input_method")]
 #[derive(Debug, Clone)]
 pub enum InputMethodEventVariant {
     Activate,
@@ -316,6 +319,7 @@ pub enum InputMethodEventVariant {
     Done,
 }
 
+#[cfg(feature = "input_method")]
 #[derive(Debug, Clone)]
 pub enum InputMethodKeyboardEventVariant {
     Press(KeyEvent),
@@ -324,6 +328,7 @@ pub enum InputMethodKeyboardEventVariant {
     Modifiers(Modifiers, RawModifiers),
 }
 
+#[cfg(feature = "input_method")]
 #[derive(Debug, Clone)]
 pub enum InputMethodPopupEventVariant {
     Created(ObjectId, SurfaceId),
@@ -506,6 +511,7 @@ impl SctkEvent {
                 .into_iter()
                 .collect(), // TODO Ashley: conversion
             },
+            #[cfg(feature = "input_method")]
             SctkEvent::InputMethodEvent { variant } => match variant {
                 InputMethodEventVariant::Activate => Default::default(),
                 InputMethodEventVariant::Deactivate => Default::default(),
@@ -522,6 +528,7 @@ impl SctkEvent {
                 }
                 InputMethodEventVariant::Done => Default::default(),
             },
+            #[cfg(feature = "input_method")]
             SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
                 InputMethodKeyboardEventVariant::Press(ke) => {
                     let mut skip_char = false;
@@ -661,6 +668,7 @@ impl SctkEvent {
                                 ),
                             ))
                         }
+                        #[cfg(feature = "input_method")]
                         SurfaceIdWrapper::InputMethodPopup(_) => None,
                     })
                     .into_iter()
@@ -715,6 +723,7 @@ impl SctkEvent {
                                 ),
                             ))
                         }
+                        #[cfg(feature = "input_method")]
                         SurfaceIdWrapper::InputMethodPopup(_) => None,
                     })
                     .into_iter()
@@ -1133,6 +1142,7 @@ impl SctkEvent {
                 .into_iter()
                 .collect()
             }
+            #[cfg(feature = "input_method")]
             SctkEvent::InputMethodPopupEvent { id: _, variant } => {
                 match variant {
                     InputMethodPopupEventVariant::Created(_, _) => {

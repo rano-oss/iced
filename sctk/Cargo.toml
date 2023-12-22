@@ -11,17 +11,16 @@ system = ["sysinfo"]
 application = []
 multi_window = []
 a11y = ["iced_accessibility", "iced_runtime/a11y"]
-default = ["calloop", "xkbcommon"]
-calloop = ["dep:calloop"]
-xkbcommon = ["dep:xkbcommon", "bytemuck", "pkg-config", "xkeysym/bytemuck"]
+input_method = ["calloop", "xkbcommon/wayland", "bytemuck", "pkg-config", 
+  "xkeysym/bytemuck", "wayland-protocols-misc/client", "log", "tempfile"]
+virtual_keyboard = ["wayland-protocols-misc/client"]
 
 [dependencies]
-log = "0.4"
 tracing = "0.1"
 thiserror = "1.0"
 sctk = { package = "smithay-client-toolkit", git = "https://github.com/smithay/client-toolkit", rev = "2e9bf9f" }
 wayland-protocols = { version = "0.31.0", features = [ "staging"]}
-wayland-protocols-misc = { version = "0.2.0", features = ["client"] }
+wayland-protocols-misc = { version = "0.2.0", optional = true }
 # sctk = { package = "smithay-client-toolkit", path = "../../fork/client-toolkit/" }
 raw-window-handle = "0.5"
 enum-repr = "0.2"
@@ -35,9 +34,10 @@ itertools = "0.10"
 xkeysym = "0.2.0"
 lazy_static = "1.4.0"
 bytemuck = { version = "1.14.0", optional = true }
-xkbcommon = { version = "0.6", optional = true, features = ["wayland"] }
+xkbcommon = { version = "0.6", optional = true }
 calloop = { version = "0.12.3", optional = true }
-tempfile = "3.8.1"
+tempfile = { version = "3.8.1", optional = true }
+log = { version = "0.4", optional = true }
 
 [build-dependencies]
 pkg-config = { version = "0.3", optional = true }

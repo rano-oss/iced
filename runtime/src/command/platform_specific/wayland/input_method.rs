@@ -3,7 +3,6 @@ use std::fmt;
 use std::marker::PhantomData;
 
 /// Input Method Action
-/// TODO: Improve comments
 pub struct Action<T> {
     /// The inner action
     pub inner: ActionInner,

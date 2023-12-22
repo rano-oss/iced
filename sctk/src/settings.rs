@@ -1,7 +1,8 @@
 use iced_runtime::command::platform_specific::wayland::{
-    input_method_popup::InputMethodPopupSettings,
     layer_surface::SctkLayerSurfaceSettings, window::SctkWindowSettings,
 };
+#[cfg(feature = "input_method")]
+use iced_runtime::command::platform_specific::wayland::input_method_popup::InputMethodPopupSettings;
 
 #[derive(Debug)]
 pub struct Settings<Flags> {
@@ -23,6 +24,7 @@ pub struct Settings<Flags> {
 pub enum InitialSurface {
     LayerSurface(SctkLayerSurfaceSettings),
     XdgWindow(SctkWindowSettings),
+    #[cfg(feature = "input_method")]
     InputMethodPopup(InputMethodPopupSettings),
     None,
 }

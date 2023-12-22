@@ -48,6 +48,4 @@ pub enum Event {
     InputMethod(InputMethodEvent),
     /// Input Method Keyboard Event
     InputMethodKeyboard(InputMethodKeyboardEvent),
-    // /// Input Method Popup Event
-    // InputMethodPopup(InputMethodPopupEvent)
 }

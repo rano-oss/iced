@@ -2,23 +2,28 @@
 use crate::sctk_event::ActionRequestEvent;
 use crate::{
     clipboard::Clipboard,
-    commands::{
-        input_method::get_input_method_popup, layer_surface::get_layer_surface,
-        window::get_window,
-    },
-    conversion::keysym_to_vkey,
+    commands::{layer_surface::get_layer_surface, window::get_window},
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
     error::{self, Error},
     event_loop::{
         control_flow::ControlFlow, proxy, state::SctkState, SctkEventLoop,
     },
     sctk_event::{
-        DataSourceEvent, IcedSctkEvent, InputMethodEventVariant,
-        InputMethodKeyboardEventVariant, KeyboardEventVariant,
+        DataSourceEvent, IcedSctkEvent, KeyboardEventVariant,
         LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
     },
     settings,
 };
+#[cfg(feature = "input_method")]
+use crate::{
+    conversion::keysym_to_vkey,
+    commands::input_method::get_input_method_popup,
+    sctk_event::{InputMethodEventVariant, InputMethodKeyboardEventVariant},
+};
+#[cfg(feature = "input_method")]
+use iced_futures::core::event::{wayland, PlatformSpecific};
+#[cfg(feature = "input_method")]
+use iced_runtime::command::platform_specific::wayland::input_method_popup;
 use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
 #[cfg(feature = "a11y")]
@@ -28,7 +33,7 @@ use iced_accessibility::{
 };
 use iced_futures::{
     core::{
-        event::{wayland, Event as CoreEvent, PlatformSpecific, Status},
+        event::{Event as CoreEvent, Status},
         layout::Limits,
         mouse,
         renderer::Style,
@@ -66,7 +71,7 @@ use iced_runtime::{
         self,
         platform_specific::{
             self,
-            wayland::{data_device::DndIcon, input_method_popup, popup},
+            wayland::{data_device::DndIcon, popup},
         },
     },
     core::{mouse::Interaction, Color, Point, Renderer, Size},
@@ -88,8 +93,10 @@ pub enum Event<Message> {
     /// TODO
     // (maybe we should also allow users to listen/react to those internal messages?)
     /// Input Method requests from client
+    #[cfg(feature = "input_method")]
     InputMethod(platform_specific::wayland::input_method::Action<Message>),
     /// Input Method Popup requests from client
+    #[cfg(feature = "input_method")]
     InputMethodPopup(
         platform_specific::wayland::input_method_popup::Action<Message>,
     ),
@@ -106,6 +113,7 @@ pub enum Event<Message> {
     /// data session lock requests from the client
     SessionLock(platform_specific::wayland::session_lock::Action<Message>),
     /// virtual Keyboard requests from the client
+    #[cfg(feature = "virtual_keyboard")]
     VirtualKeyboard(
         platform_specific::wayland::virtual_keyboard::Action<Message>,
     ),
@@ -267,6 +275,7 @@ where
         settings::InitialSurface::XdgWindow(b) => {
             Command::batch(vec![init_command, get_window(b)])
         }
+        #[cfg(feature = "input_method")]
         settings::InitialSurface::InputMethodPopup(b) => {
             Command::batch(vec![init_command, get_input_method_popup(b)])
         }
@@ -504,6 +513,7 @@ where
                             }
                         }
                     },
+                    #[cfg(feature = "input_method")]
                     SctkEvent::InputMethodEvent { variant } => 
                     match variant {
                         InputMethodEventVariant::Activate => {
@@ -579,6 +589,7 @@ where
                             )
                         },
                     },
+                    #[cfg(feature = "input_method")]
                     SctkEvent::InputMethodKeyboardEvent { variant } =>
                     match variant {
                         InputMethodKeyboardEventVariant::Press(ke) => {
@@ -636,6 +647,7 @@ where
                             )
                         }
                     },
+                    #[cfg(feature = "input_method")]
                     SctkEvent::InputMethodPopupEvent { variant, id } => match variant {
                         crate::sctk_event::InputMethodPopupEventVariant::Created(object_id, native_id) => {
                             surface_ids.insert(object_id, SurfaceIdWrapper::InputMethodPopup(native_id));
@@ -1707,6 +1719,7 @@ pub enum SurfaceIdWrapper {
     Popup(SurfaceId),
     Dnd(SurfaceId),
     SessionLock(SurfaceId),
+    #[cfg(feature = "input_method")]
     InputMethodPopup(SurfaceId),
 }
 
@@ -1718,6 +1731,7 @@ impl SurfaceIdWrapper {
             SurfaceIdWrapper::Popup(id) => *id,
             SurfaceIdWrapper::Dnd(id) => *id,
             SurfaceIdWrapper::SessionLock(id) => *id,
+            #[cfg(feature = "input_method")]
             SurfaceIdWrapper::InputMethodPopup(id) => *id,
         }
     }
@@ -1794,6 +1808,7 @@ where
                 }
                 SurfaceIdWrapper::Dnd(_) => {}
                 SurfaceIdWrapper::SessionLock(_) => {}
+                #[cfg(feature = "input_method")]
                 SurfaceIdWrapper::InputMethodPopup(inner) => {
                     ev_proxy.send_event(
                         Event::InputMethodPopup(
@@ -2361,13 +2376,16 @@ where
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::SessionLock(session_lock_action))) => {
                 proxy.send_event(Event::SessionLock(session_lock_action));
             }
+            #[cfg(feature = "virtual_keyboard")]
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::VirtualKeyboard(virtual_keyboard_action))) 
             => {
                 proxy.send_event(Event::VirtualKeyboard(virtual_keyboard_action))
             }
+            #[cfg(feature = "input_method")]
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::InputMethod(input_method_action))) => {
                 proxy.send_event(Event::InputMethod(input_method_action))
             }
+            #[cfg(feature = "input_method")]
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(
                 platform_specific::wayland::Action::InputMethodPopup(input_method_popup_action))) => {
                     if let input_method_popup::Action::Popup { mut settings, _phantom } = input_method_popup_action {
@@ -2465,8 +2483,11 @@ fn event_is_for_surface(
             &surface.id() == object_id
         }
         SctkEvent::SessionUnlocked => false,
+        #[cfg(feature = "input_method")]
         SctkEvent::InputMethodEvent { .. } => false,
+        #[cfg(feature = "input_method")]
         SctkEvent::InputMethodKeyboardEvent { .. } => true,
+        #[cfg(feature = "input_method")]
         SctkEvent::InputMethodPopupEvent { variant: _, id } => {
             &id.id() == object_id
         }
