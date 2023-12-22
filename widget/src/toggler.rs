@@ -14,8 +14,6 @@ use crate::core::{
     Rectangle, Shell, Widget,
 };
 use crate::{Row, Text};
-#[cfg(feature = "a11y")]
-use std::borrow::Cow;
 
 pub use crate::style::toggler::{Appearance, StyleSheet};
 

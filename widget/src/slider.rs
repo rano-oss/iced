@@ -12,9 +12,8 @@ use crate::core::{
     Clipboard, Color, Element, Layout, Length, Pixels, Point, Rectangle, Shell,
     Size, Widget,
 };
-#[cfg(feature = "a11y")]
-use std::borrow::Cow;
 
+use std::borrow::Cow;
 use std::ops::RangeInclusive;
 
 use iced_renderer::core::{BorderRadius, Degrees, Radians};
