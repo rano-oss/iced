@@ -18,14 +18,13 @@ use crate::{
     conversion,
     dpi::LogicalSize,
     handlers::{
-        activation::IcedRequestData, 
+        activation::IcedRequestData,
         wp_fractional_scaling::FractionalScalingManager,
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DndOfferEvent, IcedSctkEvent,
-        LayerSurfaceEventVariant, PopupEventVariant, SctkEvent, StartCause,
-        WindowEventVariant,
+        DndOfferEvent, IcedSctkEvent,LayerSurfaceEventVariant,
+        PopupEventVariant, SctkEvent, StartCause, WindowEventVariant,
     },
     settings,
 };
