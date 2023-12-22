@@ -2,9 +2,7 @@
 use crate::sctk_event::ActionRequestEvent;
 use crate::{
     clipboard::Clipboard,
-    commands::{
-        layer_surface::get_layer_surface, window::get_window,
-    },
+    commands::{layer_surface::get_layer_surface, window::get_window},
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
     error::{self, Error},
     event_loop::{
