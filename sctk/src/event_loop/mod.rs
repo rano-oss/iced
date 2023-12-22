@@ -23,7 +23,7 @@ use crate::{
         wp_viewporter::ViewporterState,
     },
     sctk_event::{
-        DndOfferEvent, IcedSctkEvent,LayerSurfaceEventVariant,
+        DndOfferEvent, IcedSctkEvent, LayerSurfaceEventVariant,
         PopupEventVariant, SctkEvent, StartCause, WindowEventVariant,
     },
     settings,
