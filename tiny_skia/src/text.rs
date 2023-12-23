@@ -64,8 +64,6 @@ impl Pipeline {
             pixels,
             clip_mask,
         );
-
-        self.cache = RefCell::new(Cache::new());
     }
 
     pub fn draw_editor(

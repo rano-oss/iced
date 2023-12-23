@@ -80,7 +80,6 @@ impl Backend {
                 .expect("Create damage rectangle"),
             );
 
-            // background color should replace the previous contents
             pixels.fill_path(
                 &path,
                 &tiny_skia::Paint {
