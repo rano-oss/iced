@@ -2,7 +2,7 @@
 use crate::Command;
 
 use iced_core::text;
-use iced_core::{window::Id, Element, Renderer};
+use iced_core::{Element, Renderer};
 
 mod state;
 

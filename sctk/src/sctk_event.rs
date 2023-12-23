@@ -1,13 +1,13 @@
+#[cfg(feature = "input_method")]
+use crate::handlers::input_method::keyboard::RawModifiers;
 use crate::{
     application::SurfaceIdWrapper,
     conversion::{
         keysym_to_vkey, modifiers_to_native, pointer_axis_to_native,
         pointer_button_to_native,
     },
-    dpi::PhysicalSize
+    dpi::PhysicalSize,
 };
-#[cfg(feature = "input_method")]
-use crate::handlers::input_method::keyboard::RawModifiers;
 use iced_futures::core::event::{
     wayland::{LayerEvent, PopupEvent, SessionLockEvent},
     PlatformSpecific,
@@ -497,13 +497,13 @@ impl SctkEvent {
                     vertical,
                     source,
                 } => pointer_axis_to_native(source, horizontal, vertical)
-                .map(|a| {
-                    iced_runtime::core::Event::Mouse(
-                        mouse::Event::WheelScrolled { delta: a },
-                    )
-                })
-                .into_iter()
-                .collect(), // TODO Ashley: conversion
+                    .map(|a| {
+                        iced_runtime::core::Event::Mouse(
+                            mouse::Event::WheelScrolled { delta: a },
+                        )
+                    })
+                    .into_iter()
+                    .collect(), // TODO Ashley: conversion
             },
             #[cfg(feature = "input_method")]
             SctkEvent::InputMethodEvent { variant } => match variant {
