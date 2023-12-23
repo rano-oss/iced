@@ -18,6 +18,7 @@ use crate::core::{
     Background, Clipboard, Color, Element, Layout, Length, Padding, Point,
     Rectangle, Shell, Vector, Widget,
 };
+
 use iced_renderer::core::widget::{operation, OperationOutputWrapper};
 pub use iced_style::button::{Appearance, StyleSheet};
 
@@ -184,41 +185,6 @@ where
             Some(label.label().into_iter().map(|l| l.into()).collect());
         self
     }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the name of the [`Button`].
-    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the description of the [`Button`].
-    pub fn description_widget<T: iced_accessibility::Describes>(
-        mut self,
-        description: &T,
-    ) -> Self {
-        self.description = Some(iced_accessibility::Description::Id(
-            description.description(),
-        ));
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the description of the [`Button`].
-    pub fn description(mut self, description: impl Into<Cow<'a, str>>) -> Self {
-        self.description =
-            Some(iced_accessibility::Description::Text(description.into()));
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the label of the [`Button`].
-    pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
-        self.label =
-            Some(label.label().into_iter().map(|l| l.into()).collect());
-        self
-    }
 }
 
 impl<'a, Message, Renderer> Widget<Message, Renderer>
@@ -282,8 +248,6 @@ where
                 operation,
             );
         });
-        let state = tree.state.downcast_mut::<State>();
-        operation.focusable(state, Some(&self.id));
     }
 
     fn on_event(
@@ -616,22 +580,18 @@ pub fn draw<'a, Renderer: crate::core::Renderer>(
 where
     Renderer::Theme: StyleSheet,
 {
-    let is_mouse_over = cursor
-        .position()
-        .map(|p| bounds.contains(p))
-        .unwrap_or(false);
-    let state: &State = state();
+    let is_mouse_over = cursor.is_over(bounds);
 
     let styling = if !is_enabled {
         style_sheet.disabled(style)
     } else if is_mouse_over {
+        let state = state();
+
         if state.is_pressed {
             style_sheet.pressed(style)
         } else {
             style_sheet.hovered(style)
         }
-    } else if state.is_focused {
-        style_sheet.focused(style)
     } else {
         style_sheet.active(style)
     };

@@ -222,7 +222,7 @@ where
         self.0.update(message)
     }
 
-    fn view(&self, _id: Id) -> Element<'_, Self::Message, Self::Renderer> {
+    fn view(&self) -> Element<'_, Self::Message, Self::Renderer> {
         self.0.view()
     }
 }

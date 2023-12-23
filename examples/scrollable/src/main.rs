@@ -1,7 +1,4 @@
-use iced::id::Id;
-use iced::widget::scrollable::{
-    Properties, Scrollbar, ScrollbarProperties, Scroller,
-};
+use iced::widget::scrollable::{Properties, Scrollbar, Scroller};
 use iced::widget::{
     button, column, container, horizontal_space, progress_bar, radio, row,
     scrollable, slider, text, vertical_space,

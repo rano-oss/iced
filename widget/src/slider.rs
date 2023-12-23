@@ -13,7 +13,6 @@ use crate::core::{
     Size, Widget,
 };
 
-use std::borrow::Cow;
 use std::ops::RangeInclusive;
 
 use iced_renderer::core::{BorderRadius, Degrees, Radians};
@@ -159,41 +158,6 @@ where
     /// Sets the step size of the [`Slider`].
     pub fn step(mut self, step: impl Into<T>) -> Self {
         self.step = step.into();
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the name of the [`Button`].
-    pub fn name(mut self, name: impl Into<Cow<'a, str>>) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the description of the [`Button`].
-    pub fn description_widget(
-        mut self,
-        description: &impl iced_accessibility::Describes,
-    ) -> Self {
-        self.description = Some(iced_accessibility::Description::Id(
-            description.description(),
-        ));
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the description of the [`Button`].
-    pub fn description(mut self, description: impl Into<Cow<'a, str>>) -> Self {
-        self.description =
-            Some(iced_accessibility::Description::Text(description.into()));
-        self
-    }
-
-    #[cfg(feature = "a11y")]
-    /// Sets the label of the [`Button`].
-    pub fn label(mut self, label: &dyn iced_accessibility::Labels) -> Self {
-        self.label =
-            Some(label.label().into_iter().map(|l| l.into()).collect());
         self
     }
 
