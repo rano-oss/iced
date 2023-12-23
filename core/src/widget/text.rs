@@ -7,7 +7,6 @@ use crate::text::{self, Paragraph};
 use crate::widget::tree::{self, Tree};
 use crate::{Color, Element, Layout, Length, Pixels, Point, Rectangle, Widget};
 
-use log::debug;
 use std::borrow::Cow;
 
 pub use text::{LineHeight, Shaping};
