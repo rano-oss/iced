@@ -1,17 +1,17 @@
-//! Allow your users to perform actions by pressing a button.
+//! Allow your users to perform actions by selecting a field.
 
 use super::style::StyleSheet;
-use iced_core::event::{self, Event};
-use iced_core::layout;
-use iced_core::mouse;
-use iced_core::overlay;
-use iced_core::renderer;
-use iced_core::touch;
-use iced_core::widget::tree::{self, Tree};
-use iced_core::{
-    Background, Clipboard, Color, Element, Layout, Length, Padding, Point, Rectangle, Shell, Widget,
+use iced_runtime::core::{
+    event::{self, Event},
+    layout,
+    mouse,
+    overlay,
+    renderer,
+    touch,
+    widget::{Id, tree::{self, Tree}},
+    Background, Clipboard, Color, Element, Layout, Length, Padding, Point,
+    Rectangle, Shell, Widget,
 };
-use iced_runtime::core::widget::Id;
 
 /// A generic widget that produces a message when pressed.
 #[allow(missing_debug_implementations)]
@@ -98,7 +98,10 @@ where
     }
 
     /// Sets the style variant of this [`Button`].
-    pub fn style(mut self, style: <Renderer::Theme as StyleSheet>::Style) -> Self {
+    pub fn style(
+        mut self,
+        style: <Renderer::Theme as StyleSheet>::Style,
+    ) -> Self {
         self.style = style;
         self
     }
@@ -110,7 +113,8 @@ where
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for SelectionField<'a, Message, Renderer>
+impl<'a, Message, Renderer> Widget<Message, Renderer>
+    for SelectionField<'a, Message, Renderer>
 where
     Message: 'a + Clone,
     Renderer: 'a + iced_core::Renderer,
@@ -140,12 +144,21 @@ where
         self.height
     }
 
-    fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         let limits = limits.width(self.width).height(self.height);
 
-        let mut content = self.content.as_widget().layout(renderer, &limits);
+        let mut content = self.content.as_widget().layout(
+            &mut tree.children[0],
+            renderer,
+            &limits,
+        );
         let padding = self.padding.fit(content.size(), limits.max());
-        let size = limits.pad(padding).resolve(content.size()).pad(padding);
+        let size = limits.pad(self.padding).resolve(content.size()).pad(self.padding);
 
         content.move_to(Point::new(padding.left, padding.top));
 
@@ -178,7 +191,9 @@ where
         let state = tree.state.downcast_mut::<State>();
         match event {
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if let Some(_cursor_position) = cursor.position_in(layout.bounds()) {
+                if let Some(_cursor_position) =
+                    cursor.position_in(layout.bounds())
+                {
                     state.is_hovered = true;
                     if let Some(on_select) = self.on_select.clone() {
                         shell.publish(on_select);
@@ -253,7 +268,9 @@ where
             renderer,
             theme,
             &renderer::Style {
-                icon_color: styling.icon_color.unwrap_or(renderer_style.icon_color),
+                icon_color: styling
+                    .icon_color
+                    .unwrap_or(renderer_style.icon_color),
                 text_color: styling.text_color,
                 scale_factor: renderer_style.scale_factor,
             },

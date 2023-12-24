@@ -2,23 +2,30 @@
 extern crate lazy_static;
 
 use iced::{
-    event::{self, wayland::InputMethodEvent},
-    subscription,
+    event::{self, listen_raw, wayland::InputMethodEvent},
     wayland::{
         actions::{
-            input_method::ActionInner, input_method_popup::InputMethodPopupSettings,
+            input_method::ActionInner,
+            input_method_popup::InputMethodPopupSettings,
             virtual_keyboard::ActionInner as VKActionInner,
         },
-        input_method::{hide_input_method_popup, input_method_action, show_input_method_popup},
+        input_method::{
+            hide_input_method_popup, input_method_action,
+            show_input_method_popup,
+        },
         virtual_keyboard::virtual_keyboard_action,
         InitialSurface,
     },
     widget::{column, container, row, text},
-    window, Alignment, Application, Color, Command, Element, Event, Settings, Subscription, Theme,
+    window, Alignment, Application, Color, Command, Element, Event, Settings,
+    Subscription, Theme,
 };
 use iced_core::{
-    event::wayland::{InputMethodKeyboardEvent, KeyEvent, Modifiers, RawModifiers},
+    event::wayland::{
+        InputMethodKeyboardEvent, KeyEvent, Modifiers, RawModifiers,
+    },
     keyboard::KeyCode,
+    window::Id,
 };
 use iced_style::application;
 use selection_field::widget::selection_field;
@@ -60,12 +67,18 @@ impl InputMethod {
     fn commit_string(&mut self, character: char) -> Command<Message> {
         Command::batch(vec![
             hide_input_method_popup(),
-            input_method_action(ActionInner::CommitString(character.to_string())),
+            input_method_action(ActionInner::CommitString(
+                character.to_string(),
+            )),
             input_method_action(ActionInner::Commit),
         ])
     }
 
-    fn open_popup(&mut self, character: char, list: &Vec<char>) -> Command<Message> {
+    fn open_popup(
+        &mut self,
+        character: char,
+        list: &Vec<char>,
+    ) -> Command<Message> {
         self.popup = true;
         self.index = 0;
         self.list = list.clone();
@@ -110,7 +123,7 @@ impl Application for InputMethod {
         )
     }
 
-    fn title(&self) -> String {
+    fn title(&self, _: Id) -> String {
         String::from("InputMethod")
     }
 
@@ -133,7 +146,9 @@ impl Application for InputMethod {
                             }
                             Command::none()
                         }
-                        KeyCode::Enter => self.commit_string(self.list[self.index]),
+                        KeyCode::Enter => {
+                            self.commit_string(self.list[self.index])
+                        }
                         _ => Command::none(),
                     }
                 } else {
@@ -150,7 +165,9 @@ impl Application for InputMethod {
                         if let Some(list) = ACCENTKEYS.get(&utf8) {
                             self.open_popup(utf8, list)
                         } else {
-                            virtual_keyboard_action(VKActionInner::KeyPressed(key))
+                            virtual_keyboard_action(VKActionInner::KeyPressed(
+                                key,
+                            ))
                         }
                     } else {
                         virtual_keyboard_action(VKActionInner::KeyPressed(key))
@@ -176,13 +193,17 @@ impl Application for InputMethod {
             Message::KeyReleased(key, key_code, _modifiers) => {
                 if !self.popup {
                     Command::batch(vec![
-                        virtual_keyboard_action(VKActionInner::KeyPressed(key.clone())),
-                        virtual_keyboard_action(VKActionInner::KeyReleased(key))
+                        virtual_keyboard_action(VKActionInner::KeyPressed(
+                            key.clone(),
+                        )),
+                        virtual_keyboard_action(VKActionInner::KeyReleased(
+                            key,
+                        )),
                     ])
                 } else {
                     match key_code {
                         KeyCode::Enter => self.popup = false,
-                        _ => {},
+                        _ => {}
                     }
                     Command::none()
                 }
@@ -207,12 +228,15 @@ impl Application for InputMethod {
                 .map(|(index, char)| {
                     selection_field(
                         column(vec![
-                            text((index + 1) % 10).size(50).style(Color::WHITE).into(),
-                            text(char).size(50).into(),
+                            text((index + 1) % 10)
+                                .size(50)
+                                .style(Color::WHITE)
+                                .into(),
+                            text(char).style(Color::WHITE).size(50).into(),
                         ])
                         .align_items(Alignment::Center)
                         .padding(5.0)
-                        .spacing(4.0),
+                        .spacing(4.0)
                     )
                     .set_indexes(index)
                     .selected(self.index)
@@ -231,7 +255,7 @@ impl Application for InputMethod {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        subscription::events_with(|event, status| match (event.clone(), status) {
+        listen_raw(|event, status| match (event.clone(), status) {
             (
                 Event::PlatformSpecific(event::PlatformSpecific::Wayland(
                     event::wayland::Event::InputMethod(event),
@@ -258,20 +282,19 @@ impl Application for InputMethod {
                 InputMethodKeyboardEvent::Repeat(key, key_code, modifiers) => {
                     Some(Message::KeyRepeat(key, key_code, modifiers))
                 }
-                InputMethodKeyboardEvent::Modifiers(modifiers, raw_modifiers) => {
-                    Some(Message::Modifiers(modifiers, raw_modifiers))
-                }
+                InputMethodKeyboardEvent::Modifiers(
+                    modifiers,
+                    raw_modifiers,
+                ) => Some(Message::Modifiers(modifiers, raw_modifiers)),
             },
             _ => None,
         })
     }
 
-    fn close_requested(&self, _id: window::Id) -> Message {
-        unimplemented!()
-    }
-
     fn style(&self) -> <Self::Theme as application::StyleSheet>::Style {
-        <Self::Theme as application::StyleSheet>::Style::Custom(Box::new(CustomTheme))
+        <Self::Theme as application::StyleSheet>::Style::Custom(Box::new(
+            CustomTheme,
+        ))
     }
 }
 

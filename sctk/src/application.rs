@@ -255,6 +255,9 @@ where
             Command::batch(vec![init_command, get_window(b)])
         }
         settings::InitialSurface::None => init_command,
+        #[cfg(feature = "input_method")]
+        settings::InitialSurface::InputMethodPopup(b) => 
+            Command::batch(vec![init_command, get_input_method_popup(b)]),
     };
     let wl_surface = event_loop
         .state
@@ -625,10 +628,7 @@ where
                         crate::sctk_event::InputMethodPopupEventVariant::Created(object_id, native_id) => {
                             surface_ids.insert(object_id, SurfaceIdWrapper::InputMethodPopup(native_id));
                             states.insert(native_id, State::new(&application, SurfaceIdWrapper::InputMethodPopup(native_id)));
-                            let Some(state) = states.get(&native_id) else {
-                                continue;
-                            };
-                            compositor_surfaces.entry(state.id.inner()).or_insert_with(|| {
+                            compositor_surfaces.entry(native_id).or_insert_with(|| {
                                 let mut wrapper = SurfaceDisplayWrapper {
                                     comp_surface: None,
                                     backend: backend.clone(),
@@ -648,6 +648,9 @@ where
                                 wrapper.comp_surface.replace(c_surface);
                                 wrapper
                             });
+                            let Some(state) = states.get(&native_id) else {
+                                continue;
+                            };
                             let user_interface = build_user_interface(
                                 &application,
                                 user_interface::Cache::default(),
@@ -842,10 +845,6 @@ where
                                         configure.new_size.1 as f64,
                                     );
                                 }
-<<<<<<< HEAD
-
-=======
->>>>>>> master
                             }
                         }
                         LayerSurfaceEventVariant::ScaleFactorChanged(sf, viewport) => {
@@ -2358,9 +2357,11 @@ where
                 platform_specific::wayland::Action::InputMethodPopup(input_method_popup_action))) => {
                     if let input_method_popup::Action::Popup { mut settings, _phantom } = input_method_popup_action {
                         let mut e = application.view(settings.id);
-                        let _state = Widget::state(e.as_widget());
+                        let mut tree = Tree::new(e.as_widget());
+                        tree.state = Widget::state(e.as_widget());
+                        // let _state = Widget::state(e.as_widget());
                         e.as_widget_mut().diff(&mut Tree::empty());
-                        let node = Widget::layout(e.as_widget(), renderer, &settings.size_limits);
+                        let node = Widget::layout(e.as_widget(), &mut tree, renderer, &settings.size_limits);
                         let bounds = node.bounds();
                         let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
                         auto_size_surfaces.insert(SurfaceIdWrapper::InputMethodPopup(settings.id), (w, h, settings.size_limits, false));

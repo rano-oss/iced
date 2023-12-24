@@ -18,9 +18,13 @@ pub struct InputMethodPopupSettings {
 impl Default for InputMethodPopupSettings {
     fn default() -> Self {
         Self {
-            id: Id::default(),
-            size_limits: Limits::NONE,
-            size: (1, 1),
+            id: Id::MAIN,
+            size_limits: Limits::NONE
+                .min_height(1.0)
+                .min_width(1.0)
+                .max_width(1920.0)
+                .max_height(1080.0),
+            size: (256, 256),
         }
     }
 }
