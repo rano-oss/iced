@@ -2356,11 +2356,8 @@ where
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(
                 platform_specific::wayland::Action::InputMethodPopup(input_method_popup_action))) => {
                     if let input_method_popup::Action::Popup { mut settings, _phantom } = input_method_popup_action {
-                        let mut e = application.view(settings.id);
+                        let e = application.view(settings.id);
                         let mut tree = Tree::new(e.as_widget());
-                        tree.state = Widget::state(e.as_widget());
-                        // let _state = Widget::state(e.as_widget());
-                        e.as_widget_mut().diff(&mut Tree::empty());
                         let node = Widget::layout(e.as_widget(), &mut tree, renderer, &settings.size_limits);
                         let bounds = node.bounds();
                         let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
