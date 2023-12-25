@@ -14,6 +14,16 @@ use crate::{
     },
     settings,
 };
+#[cfg(feature = "input_method")]
+use crate::{
+    conversion::keysym_to_vkey,
+    commands::input_method::get_input_method_popup,
+    sctk_event::{InputMethodEventVariant, InputMethodKeyboardEventVariant},
+};
+#[cfg(feature = "input_method")]
+use iced_futures::core::event::{wayland, PlatformSpecific};
+#[cfg(feature = "input_method")]
+use iced_runtime::command::platform_specific::wayland::input_method_popup;
 use float_cmp::{approx_eq, F32Margin, F64Margin};
 use futures::{channel::mpsc, task, Future, FutureExt, StreamExt};
 #[cfg(feature = "a11y")]
@@ -87,7 +97,14 @@ pub enum Event<Message> {
     SctkEvent(IcedSctkEvent<Message>),
     /// TODO
     // (maybe we should also allow users to listen/react to those internal messages?)
-
+    /// Input Method requests from client
+    #[cfg(feature = "input_method")]
+    InputMethod(platform_specific::wayland::input_method::Action<Message>),
+    /// Input Method Popup requests from client
+    #[cfg(feature = "input_method")]
+    InputMethodPopup(
+        platform_specific::wayland::input_method_popup::Action<Message>,
+    ),
     /// layer surface requests from the client
     LayerSurface(platform_specific::wayland::layer_surface::Action<Message>),
     /// window requests from the client
@@ -100,6 +117,11 @@ pub enum Event<Message> {
     Activation(platform_specific::wayland::activation::Action<Message>),
     /// data session lock requests from the client
     SessionLock(platform_specific::wayland::session_lock::Action<Message>),
+    /// virtual Keyboard requests from the client
+    #[cfg(feature = "virtual_keyboard")]
+    VirtualKeyboard(
+        platform_specific::wayland::virtual_keyboard::Action<Message>,
+    ),
     /// request sctk to set the cursor of the active pointer
     SetCursor(Interaction),
     /// Application Message
@@ -251,6 +273,9 @@ where
             Command::batch(vec![init_command, get_window(b)])
         }
         settings::InitialSurface::None => init_command,
+        #[cfg(feature = "input_method")]
+        settings::InitialSurface::InputMethodPopup(b) => 
+            Command::batch(vec![init_command, get_input_method_popup(b)]),
     };
     let wl_surface = event_loop
         .state
@@ -479,6 +504,208 @@ where
                                 state.modifiers = mods;
                             }
                         }
+                    },
+                    #[cfg(feature = "input_method")]
+                    SctkEvent::InputMethodEvent { variant } => 
+                    match variant {
+                        InputMethodEventVariant::Activate => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::Activate
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                        InputMethodEventVariant::Deactivate => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::Deactivate
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                        InputMethodEventVariant::SurroundingText { text, cursor, anchor } => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::SurroundingText{ text, cursor, anchor }
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                        InputMethodEventVariant::TextChangeCause(change_cause) => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::TextChangeCause(change_cause)
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                        InputMethodEventVariant::ContentType(content_hint, content_purpose) => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::ContentType(content_hint, content_purpose)
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                        InputMethodEventVariant::Done => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethod(
+                                            wayland::InputMethodEvent::Done
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        },
+                    },
+                    #[cfg(feature = "input_method")]
+                    SctkEvent::InputMethodKeyboardEvent { variant } =>
+                    match variant {
+                        InputMethodKeyboardEventVariant::Press(ke) => {
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
+                                            )
+                                        )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
+                        }
+                        InputMethodKeyboardEventVariant::Release(ke) => {
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code, mods.into())
+                                            )
+                                        )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
+                        }
+                        InputMethodKeyboardEventVariant::Repeat(ke) => {
+                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                                runtime.broadcast(
+                                    iced_runtime::core::Event::PlatformSpecific(
+                                        PlatformSpecific::Wayland(
+                                            wayland::Event::InputMethodKeyboard(
+                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code, mods.into())
+                                            )
+                                        )
+                                    ),
+                                    Status::Ignored
+                                )
+                            }
+                        }
+                        InputMethodKeyboardEventVariant::Modifiers(modifiers, raw_modifiers) => {
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethodKeyboard(
+                                            wayland::InputMethodKeyboardEvent::Modifiers(modifiers.into(), raw_modifiers.into())
+                                        )
+                                    )
+                                ),
+                                Status::Ignored
+                            )
+                        }
+                    },
+                    #[cfg(feature = "input_method")]
+                    SctkEvent::InputMethodPopupEvent { variant, id } => match variant {
+                        crate::sctk_event::InputMethodPopupEventVariant::Created(object_id, native_id) => {
+                            surface_ids.insert(object_id, SurfaceIdWrapper::InputMethodPopup(native_id));
+                            states.insert(native_id, State::new(&application, SurfaceIdWrapper::InputMethodPopup(native_id)));
+                            compositor_surfaces.entry(native_id).or_insert_with(|| {
+                                let mut wrapper = SurfaceDisplayWrapper {
+                                    comp_surface: None,
+                                    backend: backend.clone(),
+                                    wl_surface: id
+                                };
+                                if matches!(simple_clipboard.state,  crate::clipboard::State::Unavailable) {
+                                    if let RawDisplayHandle::Wayland(handle) = wrapper.raw_display_handle() {
+                                        assert!(!handle.display.is_null());
+                                        simple_clipboard = unsafe { Clipboard::connect(handle.display) };
+                                    }
+                                }
+                                let c_surface = compositor.create_surface(
+                                    &wrapper, 
+                                    256, 
+                                    256
+                                );
+                                wrapper.comp_surface.replace(c_surface);
+                                wrapper
+                            });
+                            let Some(state) = states.get(&native_id) else {
+                                continue;
+                            };
+                            let user_interface = build_user_interface(
+                                &application,
+                                user_interface::Cache::default(),
+                                &mut renderer,
+                                state.logical_size(),
+                                &state.title,
+                                &mut debug,
+                                state.id,
+                                &mut auto_size_surfaces,
+                                &mut ev_proxy
+                            );
+                            interfaces.insert(native_id, user_interface);
+                        },
+                        crate::sctk_event::InputMethodPopupEventVariant::ScaleFactorChanged(sf, viewport) => {
+                            if let Some(state) = surface_ids
+                                .get(&id.id())
+                                .and_then(|id| states.get_mut(&id.inner()))
+                            {
+                                state.wp_viewport = viewport;
+                                state.set_scale_factor(sf);
+                            }
+                        },
+                        crate::sctk_event::InputMethodPopupEventVariant::Size(width, height) => {
+                            if let Some(id) = surface_ids.get(&id.id()) {
+                                if let Some(state) = states.get_mut(&id.inner()) {
+                                    state.set_logical_size(
+                                        width as f64,
+                                        height as f64,
+                                    );
+                                }
+                                if let Some((w, h, _, dirty)) = auto_size_surfaces.get_mut(id) {
+                                    if *w == width && *h == height {
+                                        *dirty = false;
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                            }
+                        },
                     },
                     SctkEvent::WindowEvent { variant, id: wl_surface } => match variant {
                         crate::sctk_event::WindowEventVariant::Created(id, native_id) => {
@@ -1510,6 +1737,8 @@ pub enum SurfaceIdWrapper {
     Popup(SurfaceId),
     Dnd(SurfaceId),
     SessionLock(SurfaceId),
+    #[cfg(feature = "input_method")]
+    InputMethodPopup(SurfaceId),
 }
 
 impl SurfaceIdWrapper {
@@ -1520,6 +1749,8 @@ impl SurfaceIdWrapper {
             SurfaceIdWrapper::Popup(id) => *id,
             SurfaceIdWrapper::Dnd(id) => *id,
             SurfaceIdWrapper::SessionLock(id) => *id,
+            #[cfg(feature = "input_method")]
+            SurfaceIdWrapper::InputMethodPopup(id) => *id,
         }
     }
 }
@@ -1594,6 +1825,14 @@ where
                 }
                 SurfaceIdWrapper::Dnd(_) => {}
                 SurfaceIdWrapper::SessionLock(_) => {}
+                #[cfg(feature = "input_method")]
+                SurfaceIdWrapper::InputMethodPopup(inner) => {
+                    ev_proxy.send_event(
+                        Event::InputMethodPopup(
+                            command::platform_specific::wayland::input_method_popup::Action::Size { id: inner, width: w, height: h },
+                        )
+                    );
+                }
             };
         }
 
@@ -2162,6 +2401,31 @@ where
             command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::SessionLock(session_lock_action))) => {
                 proxy.send_event(Event::SessionLock(session_lock_action));
             }
+            #[cfg(feature = "virtual_keyboard")]
+            command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::VirtualKeyboard(virtual_keyboard_action))) 
+            => {
+                proxy.send_event(Event::VirtualKeyboard(virtual_keyboard_action))
+            }
+            #[cfg(feature = "input_method")]
+            command::Action::PlatformSpecific(platform_specific::Action::Wayland(platform_specific::wayland::Action::InputMethod(input_method_action))) => {
+                proxy.send_event(Event::InputMethod(input_method_action))
+            }
+            #[cfg(feature = "input_method")]
+            command::Action::PlatformSpecific(platform_specific::Action::Wayland(
+                platform_specific::wayland::Action::InputMethodPopup(input_method_popup_action))) => {
+                    if let input_method_popup::Action::Popup { mut settings, _phantom } = input_method_popup_action {
+                        let e = application.view(settings.id);
+                        let mut tree = Tree::new(e.as_widget());
+                        let node = Widget::layout(e.as_widget(), &mut tree, renderer, &settings.size_limits);
+                        let bounds = node.bounds();
+                        let (w, h) = ((bounds.width.round()) as u32, (bounds.height.round()) as u32);
+                        auto_size_surfaces.insert(SurfaceIdWrapper::InputMethodPopup(settings.id), (w, h, settings.size_limits, false));
+                        settings.size = (w, h);
+                        proxy.send_event(Event::InputMethodPopup(input_method_popup::Action::Popup { settings, _phantom }))
+                    } else {
+                        proxy.send_event(Event::InputMethodPopup(input_method_popup_action))
+                    }
+            }
             _ => {}
         };
     None
@@ -2249,5 +2513,13 @@ fn event_is_for_surface(
             &surface.id() == object_id
         }
         SctkEvent::SessionUnlocked => false,
+        #[cfg(feature = "input_method")]
+        SctkEvent::InputMethodEvent { .. } => false,
+        #[cfg(feature = "input_method")]
+        SctkEvent::InputMethodKeyboardEvent { .. } => true,
+        #[cfg(feature = "input_method")]
+        SctkEvent::InputMethodPopupEvent { variant: _, id } => {
+            &id.id() == object_id
+        }
     }
 }

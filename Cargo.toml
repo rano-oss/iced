@@ -54,8 +54,12 @@ advanced = []
 a11y = ["iced_accessibility", "iced_core/a11y", "iced_widget/a11y", "iced_winit?/a11y", "iced_sctk?/a11y"]
 # Enables the winit shell. Conflicts with `wayland` and `glutin`.
 winit = ["iced_winit", "iced_accessibility?/accesskit_winit"]
-# Enables the sctk shell. COnflicts with `winit` and `glutin`.
+# Enables the sctk shell. Conflicts with `winit` and `glutin`.
 wayland = ["iced_sctk", "iced_widget/wayland", "iced_accessibility?/accesskit_unix", "iced_core/wayland"]
+# Enables the sctk with input method support.
+wayland_input_method = ["iced_sctk/input_method"]
+# Enables the sctk with virtual keyboard.
+wayland_virtual_keyboard = ["iced_sctk/virtual_keyboard"]
 
 [dependencies]
 iced_core.workspace = true
@@ -175,6 +179,7 @@ web-time = "0.2"
 # wgpu = "0.19"
 # Newer wgpu commit that fixes Vulkan backend on Nvidia
 wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "20fda69" }
+wayland-protocols-misc = { version = "0.2.0"}
 winapi = "0.3"
 window_clipboard = "0.4"
 winit = { git = "https://github.com/pop-os/winit.git", branch = "winit-0.29" }
