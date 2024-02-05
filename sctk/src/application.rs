@@ -585,18 +585,17 @@ where
                     SctkEvent::InputMethodKeyboardEvent { variant } =>
                     match variant {
                         InputMethodKeyboardEventVariant::Press(ke) => {
-                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
-                                runtime.broadcast(
-                                    iced_runtime::core::Event::PlatformSpecific(
-                                        PlatformSpecific::Wayland(
-                                            wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
-                                            )
+                            let key_code = keysym_to_vkey(ke.keysym.raw()).unwrap_or(iced_runtime::keyboard::KeyCode::Unlabeled);
+                            runtime.broadcast(
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::InputMethodKeyboard(
+                                            wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
                                         )
-                                    ),
-                                    Status::Ignored
-                                )
-                            }
+                                    )
+                                ),
+                                Status::Ignored
+                            )
                         }
                         InputMethodKeyboardEventVariant::Release(ke) => {
                             if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
