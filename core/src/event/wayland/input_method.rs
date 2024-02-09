@@ -8,7 +8,7 @@ use sctk::{
     seat::keyboard::Keysym,
 };
 
-use crate::keyboard::KeyCode;
+use crate::keyboard::Key::Named as KeyCode;
 
 /// input method events
 #[derive(Debug, Clone, PartialEq, Eq)]
