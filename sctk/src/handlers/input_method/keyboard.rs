@@ -490,7 +490,7 @@ where
                             match unsafe {
                                 xkb::Keymap::new_from_fd(
                                     &context,
-                                    fd.as_raw_fd(),
+                                    fd,
                                     size as usize,
                                     xkb::KEYMAP_FORMAT_TEXT_V1,
                                     xkb::COMPILE_NO_FLAGS,

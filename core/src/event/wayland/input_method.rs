@@ -8,7 +8,7 @@ use sctk::{
     seat::keyboard::Keysym,
 };
 
-use crate::keyboard::Key::Named as KeyCode;
+use crate::keyboard::Key;
 
 /// input method events
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,11 +38,11 @@ pub enum InputMethodEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMethodKeyboardEvent {
     /// A key is pressed
-    Press(KeyEvent, KeyCode, Modifiers),
+    Press(KeyEvent, Key, Modifiers),
     /// A key is released
-    Release(KeyEvent, KeyCode, Modifiers),
+    Release(KeyEvent, Key, Modifiers),
     /// A key is repeated
-    Repeat(KeyEvent, KeyCode, Modifiers),
+    Repeat(KeyEvent, Key, Modifiers),
     /// Modifiers are updated
     Modifiers(Modifiers, RawModifiers),
 }

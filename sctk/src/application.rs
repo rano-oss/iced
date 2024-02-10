@@ -16,9 +16,11 @@ use crate::{
 };
 #[cfg(feature = "input_method")]
 use crate::{
-    conversion::keysym_to_vkey,
     commands::input_method::get_input_method_popup,
-    sctk_event::{InputMethodEventVariant, InputMethodKeyboardEventVariant},
+    sctk_event::{
+        InputMethodEventVariant, InputMethodKeyboardEventVariant, 
+        keysym_to_vkey_location   
+    },
 };
 #[cfg(feature = "input_method")]
 use iced_futures::core::event::{wayland, PlatformSpecific};
@@ -585,12 +587,12 @@ where
                     SctkEvent::InputMethodKeyboardEvent { variant } =>
                     match variant {
                         InputMethodKeyboardEventVariant::Press(ke) => {
-                            let key_code = keysym_to_vkey(ke.keysym.raw()).unwrap_or(iced_runtime::keyboard::KeyCode::Unlabeled);
+                            let (key, _) = keysym_to_vkey_location(ke.keysym);
                             runtime.broadcast(
                                 iced_runtime::core::Event::PlatformSpecific(
                                     PlatformSpecific::Wayland(
                                         wayland::Event::InputMethodKeyboard(
-                                            wayland::InputMethodKeyboardEvent::Press(ke.into(), key_code, mods.into())
+                                            wayland::InputMethodKeyboardEvent::Press(ke.into(), key, mods.into())
                                         )
                                     )
                                 ),
@@ -598,33 +600,31 @@ where
                             )
                         }
                         InputMethodKeyboardEventVariant::Release(ke) => {
-                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                            let (key, _) = keysym_to_vkey_location(ke.keysym);
                                 runtime.broadcast(
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key_code, mods.into())
+                                                wayland::InputMethodKeyboardEvent::Release(ke.into(), key, mods.into())
                                             )
                                         )
                                     ),
                                     Status::Ignored
                                 )
                             }
-                        }
                         InputMethodKeyboardEventVariant::Repeat(ke) => {
-                            if let Some(key_code) = keysym_to_vkey(ke.keysym.raw()){
+                            let (key, _) = keysym_to_vkey_location(ke.keysym);
                                 runtime.broadcast(
                                     iced_runtime::core::Event::PlatformSpecific(
                                         PlatformSpecific::Wayland(
                                             wayland::Event::InputMethodKeyboard(
-                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key_code, mods.into())
+                                                wayland::InputMethodKeyboardEvent::Repeat(ke.into(), key, mods.into())
                                             )
                                         )
                                     ),
                                     Status::Ignored
                                 )
                             }
-                        }
                         InputMethodKeyboardEventVariant::Modifiers(modifiers, raw_modifiers) => {
                             runtime.broadcast(
                                 iced_runtime::core::Event::PlatformSpecific(
@@ -642,30 +642,23 @@ where
                     SctkEvent::InputMethodPopupEvent { variant, id } => match variant {
                         crate::sctk_event::InputMethodPopupEventVariant::Created(object_id, native_id) => {
                             surface_ids.insert(object_id, SurfaceIdWrapper::InputMethodPopup(native_id));
-                            states.insert(native_id, State::new(&application, SurfaceIdWrapper::InputMethodPopup(native_id)));
-                            compositor_surfaces.entry(native_id).or_insert_with(|| {
-                                let mut wrapper = SurfaceDisplayWrapper {
-                                    comp_surface: None,
+                            let wrapper =
+                                SurfaceDisplayWrapper {
                                     backend: backend.clone(),
                                     wl_surface: id
                                 };
-                                if matches!(simple_clipboard.state,  crate::clipboard::State::Unavailable) {
-                                    if let RawDisplayHandle::Wayland(handle) = wrapper.raw_display_handle() {
-                                        assert!(!handle.display.is_null());
-                                        simple_clipboard = unsafe { Clipboard::connect(handle.display) };
-                                    }
-                                }
-                                let c_surface = compositor.create_surface(
-                                    &wrapper, 
-                                    256, 
-                                    256
-                                );
-                                wrapper.comp_surface.replace(c_surface);
-                                wrapper
-                            });
-                            let Some(state) = states.get(&native_id) else {
+                            states.insert(
+                                native_id,
+                                State::new(&application, SurfaceIdWrapper::InputMethodPopup(native_id),
+                                wrapper.clone())
+                            );
+                            let Some(state) = states.get_mut(&native_id) else {
                                 continue;
                             };
+                            if state.surface.is_none() {
+                                let c_surface = compositor.create_surface(wrapper.clone(), 256, 256);
+                                state.surface = Some(c_surface);
+                            }
                             let user_interface = build_user_interface(
                                 &application,
                                 user_interface::Cache::default(),

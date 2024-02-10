@@ -16,7 +16,10 @@ use iced_futures::core::event::{
 use iced_runtime::{
     command::platform_specific::wayland::data_device::DndIcon,
     core::{event::wayland, keyboard, mouse, window, Point},
-    keyboard::{key, Key, Location},
+    keyboard::{
+        key::{self, Named},
+        Key, Location,
+    },
     window::Id as SurfaceId,
 };
 use sctk::{
@@ -528,82 +531,12 @@ impl SctkEvent {
             },
             #[cfg(feature = "input_method")]
             SctkEvent::InputMethodKeyboardEvent { variant } => match variant {
-                InputMethodKeyboardEventVariant::Press(ke) => {
-                    let mut skip_char = false;
-
-                    let mut events: Vec<_> = keysym_to_vkey(ke.keysym.raw())
-                        .map(|k| {
-                            if k == KeyCode::Backspace {
-                                skip_char = true;
-                            }
-                            iced_runtime::core::Event::Keyboard(
-                                keyboard::Event::KeyPressed {
-                                    key_code: k,
-                                    modifiers: modifiers_to_native(*modifiers),
-                                },
-                            )
-                        })
-                        .into_iter()
-                        .collect();
-                    if !skip_char {
-                        if let Some(s) = ke.utf8 {
-                            let mut chars = s
-                                .chars()
-                                .map(|c| {
-                                    iced_runtime::core::Event::Keyboard(
-                                        keyboard::Event::CharacterReceived(c),
-                                    )
-                                })
-                                .collect();
-                            events.append(&mut chars);
-                        }
-                    }
-                    events
+                InputMethodKeyboardEventVariant::Press(_) => Default::default(),
+                InputMethodKeyboardEventVariant::Repeat(_) => {
+                    Default::default()
                 }
-                InputMethodKeyboardEventVariant::Repeat(ke) => {
-                    let mut skip_char = false;
-
-                    let mut events: Vec<_> = keysym_to_vkey(ke.keysym.raw())
-                        .map(|k| {
-                            if k == KeyCode::Backspace {
-                                skip_char = true;
-                            }
-                            iced_runtime::core::Event::Keyboard(
-                                keyboard::Event::KeyPressed {
-                                    key_code: k,
-                                    modifiers: modifiers_to_native(*modifiers),
-                                },
-                            )
-                        })
-                        .into_iter()
-                        .collect();
-                    if !skip_char {
-                        if let Some(s) = ke.utf8 {
-                            let mut chars = s
-                                .chars()
-                                .map(|c| {
-                                    iced_runtime::core::Event::Keyboard(
-                                        keyboard::Event::CharacterReceived(c),
-                                    )
-                                })
-                                .collect();
-                            events.append(&mut chars);
-                        }
-                    }
-                    events
-                }
-                InputMethodKeyboardEventVariant::Release(ke) => {
-                    keysym_to_vkey(ke.keysym.raw())
-                        .map(|k| {
-                            iced_runtime::core::Event::Keyboard(
-                                keyboard::Event::KeyReleased {
-                                    key_code: k,
-                                    modifiers: modifiers_to_native(*modifiers),
-                                },
-                            )
-                        })
-                        .into_iter()
-                        .collect()
+                InputMethodKeyboardEventVariant::Release(_) => {
+                    Default::default()
                 }
                 InputMethodKeyboardEventVariant::Modifiers(
                     new_mods,
@@ -1121,7 +1054,7 @@ impl SctkEvent {
     }
 }
 
-fn keysym_to_vkey_location(keysym: Keysym) -> (Key, Location) {
+pub fn keysym_to_vkey_location(keysym: Keysym) -> (Key, Location) {
     let raw = keysym.raw();
     let mut key = keysym_to_key(raw);
     if matches!(key, key::Key::Unidentified) {
