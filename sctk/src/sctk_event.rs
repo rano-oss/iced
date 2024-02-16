@@ -725,7 +725,7 @@ impl SctkEvent {
                     .map(|id| {
                         iced_runtime::core::Event::Window(
                             id.inner(),
-                            window::Event::CloseRequested,
+                            window::Event::Closed,
                         )
                     })
                     .into_iter()
