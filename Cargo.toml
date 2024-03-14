@@ -56,6 +56,8 @@ a11y = ["iced_accessibility", "iced_core/a11y", "iced_widget/a11y", "iced_winit?
 winit = ["iced_winit", "iced_accessibility?/accesskit_winit"]
 # Enables the sctk shell. Conflicts with `winit` and `glutin`.
 wayland = ["iced_sctk", "iced_widget/wayland", "iced_accessibility?/accesskit_unix", "iced_core/wayland"]
+# Enables clipboard for iced_sctk
+wayland-clipboard = ["iced_sctk?/clipboard"]
 # Enables the sctk with input method support.
 wayland_input_method = ["iced_sctk/input_method"]
 # Enables the sctk with virtual keyboard.

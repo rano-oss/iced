@@ -132,7 +132,7 @@ pub enum IcedSctkEvent<T> {
     DndSurfaceCreated(WlSurface, DndIcon, SurfaceId),
 
     /// Frame callback event
-    Frame(WlSurface),
+    Frame(WlSurface, u32),
 
     Subcompositor(SubsurfaceState<T>),
 }
@@ -449,6 +449,7 @@ impl SctkEvent {
         modifiers: &mut Modifiers,
         surface_ids: &HashMap<ObjectId, SurfaceIdWrapper>,
         destroyed_surface_ids: &HashMap<ObjectId, SurfaceIdWrapper>,
+        subsurface_ids: &HashMap<ObjectId, (i32, i32, SurfaceIdWrapper)>,
     ) -> Vec<iced_runtime::core::Event> {
         match self {
             // TODO Ashley: Platform specific multi-seat events?
@@ -465,11 +466,18 @@ impl SctkEvent {
                     )]
                 }
                 PointerEventKind::Motion { .. } => {
+                    let offset = if let Some((x_offset, y_offset, _)) =
+                        subsurface_ids.get(&variant.surface.id())
+                    {
+                        (*x_offset, *y_offset)
+                    } else {
+                        (0, 0)
+                    };
                     vec![iced_runtime::core::Event::Mouse(
                         mouse::Event::CursorMoved {
                             position: Point::new(
-                                variant.position.0 as f32,
-                                variant.position.1 as f32,
+                                variant.position.0 as f32 + offset.0 as f32,
+                                variant.position.1 as f32 + offset.1 as f32,
                             ),
                         },
                     )]
