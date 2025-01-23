@@ -1,6 +1,7 @@
 // handlers
 pub mod activation;
 pub mod compositor;
+pub mod input_method;
 pub mod output;
 pub mod overlap;
 pub mod seat;

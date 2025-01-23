@@ -1,3 +1,4 @@
+mod input_method;
 mod layer;
 mod output;
 mod overlap_notify;
@@ -11,6 +12,7 @@ use cctk::sctk::reexports::client::protocol::{
     wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface,
 };
 
+use input_method::InputMethodEvent;
 pub use layer::*;
 pub use output::*;
 pub use overlap_notify::*;
@@ -40,4 +42,6 @@ pub enum Event {
     Frame(Instant, WlSurface, Id),
     /// Request Resize
     RequestResize,
+    /// Input Method events
+    InputMethod(InputMethodEvent),
 }
