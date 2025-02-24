@@ -1,5 +1,6 @@
 // Shows a subsurface with a 1x1 px red buffer, stretch to window size
 
+use cctk::sctk::reexports::client::{Connection, Proxy};
 use iced::{
     event::wayland::Event as WaylandEvent,
     platform_specific::shell::subsurface_widget::{self, SubsurfaceBuffer},
@@ -7,7 +8,6 @@ use iced::{
     window::{self, Id, Settings},
     Element, Length, Subscription, Task,
 };
-use cctk::sctk::reexports::client::{Connection, Proxy};
 
 mod wayland;
 

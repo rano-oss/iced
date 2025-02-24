@@ -25,7 +25,6 @@ use cctk::sctk::{
     compositor::SurfaceData,
     error::GlobalError,
     globals::{GlobalData, ProvidesBoundGlobal},
-    shm::slot::SlotPool,
     reexports::client::{
         delegate_noop,
         protocol::{
@@ -40,6 +39,7 @@ use cctk::sctk::{
         },
         Connection, Dispatch, Proxy, QueueHandle,
     },
+    shm::slot::SlotPool,
 };
 use iced_futures::core::window;
 use wayland_backend::client::ObjectId;
@@ -253,7 +253,6 @@ impl PartialEq for SubsurfaceBuffer {
     }
 }
 
-
 impl Dispatch<WlShmPool, GlobalData> for SctkState {
     fn event(
         _: &mut SctkState,
@@ -301,8 +300,7 @@ impl Dispatch<WlBuffer, GlobalData> for SctkState {
         _: &QueueHandle<SctkState>,
     ) {
         match event {
-            wl_buffer::Event::Release => {
-            }
+            wl_buffer::Event::Release => {}
             _ => unreachable!(),
         }
     }
@@ -372,25 +370,43 @@ pub struct SubsurfaceState {
 
 impl SubsurfaceState {
     pub fn create_surface(&self) -> WlSurface {
-        self
-            .wl_compositor
+        self.wl_compositor
             .create_surface(&self.qh, SurfaceData::new(None, 1))
     }
 
-    pub fn update_surface_shm(&self, surface: &WlSurface, width: u32, height: u32, scale: f64, data: &[u8], offset: Vector) {
+    pub fn update_surface_shm(
+        &self,
+        surface: &WlSurface,
+        width: u32,
+        height: u32,
+        scale: f64,
+        data: &[u8],
+        offset: Vector,
+    ) {
         let wp_viewport = self.wp_viewporter.get_viewport(
             &surface,
             &self.qh,
             cctk::sctk::globals::GlobalData,
         );
         let shm = ShmGlobal(&self.wl_shm);
-        let mut pool = SlotPool::new(width as usize * height as usize * 4, &shm).unwrap();
-        let (buffer, canvas) = pool.create_buffer(width as i32, height as i32, width as i32 * 4, wl_shm::Format::Argb8888).unwrap();
+        let mut pool =
+            SlotPool::new(width as usize * height as usize * 4, &shm).unwrap();
+        let (buffer, canvas) = pool
+            .create_buffer(
+                width as i32,
+                height as i32,
+                width as i32 * 4,
+                wl_shm::Format::Argb8888,
+            )
+            .unwrap();
         canvas[0..width as usize * height as usize * 4].copy_from_slice(data);
         surface.damage_buffer(0, 0, width as i32, height as i32);
         buffer.attach_to(&surface);
         surface.offset(offset.x as i32, offset.y as i32);
-        wp_viewport.set_destination((width as f64 / scale) as i32, (height as f64 / scale) as i32);
+        wp_viewport.set_destination(
+            (width as f64 / scale) as i32,
+            (height as f64 / scale) as i32,
+        );
         surface.commit();
         wp_viewport.destroy();
     }

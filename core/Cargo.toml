@@ -41,7 +41,7 @@ mime.workspace = true
 cctk.workspace = true
 cctk.optional = true
 wayland-protocols.workspace = true
-wayland-protocols.optional = true
+# wayland-protocols.optional = true
 # /TODO(POP)
 
 dark-light.workspace = true

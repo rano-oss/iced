@@ -1,12 +1,12 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use iced_core::layout::Limits;
-use iced_core::window::Id;
-use iced_core::Rectangle;
 use cctk::sctk::reexports::protocols::xdg::shell::client::xdg_positioner::{
     Anchor, Gravity,
 };
+use iced_core::layout::Limits;
+use iced_core::window::Id;
+use iced_core::Rectangle;
 /// Popup creation details
 #[derive(Debug, Clone)]
 pub struct SctkPopupSettings {

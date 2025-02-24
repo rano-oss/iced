@@ -17,7 +17,7 @@ workspace = true
 debug = []
 multi-window = []
 a11y = ["iced_accessibility", "iced_core/a11y"]
-wayland = ["iced_core/wayland", "cctk"]
+wayland = ["iced_core/wayland", "cctk", "wayland-protocols"]
 
 [dependencies]
 bytes.workspace = true
@@ -26,6 +26,8 @@ iced_futures.workspace = true
 iced_futures.features = ["thread-pool"]
 cctk.workspace = true
 cctk.optional = true
+wayland-protocols.workspace = true
+wayland-protocols.optional = true
 thiserror.workspace = true
 raw-window-handle.workspace = true
 iced_accessibility.workspace = true

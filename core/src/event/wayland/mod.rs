@@ -12,7 +12,7 @@ use cctk::sctk::reexports::client::protocol::{
     wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface,
 };
 
-use input_method::InputMethodEvent;
+pub use input_method::*;
 pub use layer::*;
 pub use output::*;
 pub use overlap_notify::*;

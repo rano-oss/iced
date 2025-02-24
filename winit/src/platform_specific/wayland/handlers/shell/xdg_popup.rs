@@ -37,6 +37,7 @@ impl PopupHandler for SctkState {
                 PopupParent::LayerSurface(s) => s.clone(),
                 PopupParent::Window(s) => s.clone(),
                 PopupParent::Popup(s) => s.clone(),
+                PopupParent::InputMethodPopup(s) => s.clone(),
             },
         });
     }
@@ -57,7 +58,8 @@ impl PopupHandler for SctkState {
         while let Some(popup_to_destroy) = to_destroy.last() {
             match popup_to_destroy.data.parent.clone() {
                 state::PopupParent::LayerSurface(_)
-                | state::PopupParent::Window(_) => {
+                | state::PopupParent::Window(_)
+                | state::PopupParent::InputMethodPopup(_) => {
                     break;
                 }
                 state::PopupParent::Popup(popup_to_destroy_first) => {

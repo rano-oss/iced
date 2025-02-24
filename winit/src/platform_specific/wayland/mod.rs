@@ -87,9 +87,7 @@ impl PlatformSpecific {
                         wayland_display_handle.display.as_ptr().cast(),
                     )
                 };
-                Some(Connection::from_backend(
-                    backend,
-                ))
+                Some(Connection::from_backend(backend))
             }
             Ok(_) => {
                 log::error!("Non-Wayland display handle");
@@ -230,7 +228,9 @@ impl WaylandSpecific {
         );
     }
 
-    pub(crate) fn create_surface(&mut self) -> Option<Box<dyn HasWindowHandle + Send + Sync + 'static>> {
+    pub(crate) fn create_surface(
+        &mut self,
+    ) -> Option<Box<dyn HasWindowHandle + Send + Sync + 'static>> {
         if let Some(subsurface_state) = self.subsurface_state.as_mut() {
             let wl_surface = subsurface_state.create_surface();
             Some(Box::new(Window(wl_surface)))
@@ -239,12 +239,32 @@ impl WaylandSpecific {
         }
     }
 
-    pub(crate) fn update_surface_shm(&mut self, window: &dyn HasWindowHandle, width: u32, height: u32, scale: f64, data: &[u8], offset: Vector) {
+    pub(crate) fn update_surface_shm(
+        &mut self,
+        window: &dyn HasWindowHandle,
+        width: u32,
+        height: u32,
+        scale: f64,
+        data: &[u8],
+        offset: Vector,
+    ) {
         if let Some(subsurface_state) = self.subsurface_state.as_mut() {
-            if let RawWindowHandle::Wayland(window) = window.window_handle().unwrap().as_raw() {
-                let id = unsafe { ObjectId::from_ptr(WlSurface::interface(), window.surface.as_ptr().cast()).unwrap() };
-                let surface = WlSurface::from_id(self.conn.as_ref().unwrap(), id).unwrap();
-                subsurface_state.update_surface_shm(&surface, width, height, scale, data, offset);
+            if let RawWindowHandle::Wayland(window) =
+                window.window_handle().unwrap().as_raw()
+            {
+                let id = unsafe {
+                    ObjectId::from_ptr(
+                        WlSurface::interface(),
+                        window.surface.as_ptr().cast(),
+                    )
+                    .unwrap()
+                };
+                let surface =
+                    WlSurface::from_id(self.conn.as_ref().unwrap(), id)
+                        .unwrap();
+                subsurface_state.update_surface_shm(
+                    &surface, width, height, scale, data, offset,
+                );
             }
         }
     }
@@ -253,13 +273,21 @@ impl WaylandSpecific {
 struct Window(WlSurface);
 
 impl HasWindowHandle for Window {
-    fn window_handle(&self) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+    fn window_handle(
+        &self,
+    ) -> Result<
+        raw_window_handle::WindowHandle<'_>,
+        raw_window_handle::HandleError,
+    > {
         Ok(unsafe {
-            raw_window_handle::WindowHandle::borrow_raw(raw_window_handle::RawWindowHandle::Wayland(
-                raw_window_handle::WaylandWindowHandle::new(
-                    std::ptr::NonNull::new(self.0.id().as_ptr() as *mut _).unwrap(),
+            raw_window_handle::WindowHandle::borrow_raw(
+                raw_window_handle::RawWindowHandle::Wayland(
+                    raw_window_handle::WaylandWindowHandle::new(
+                        std::ptr::NonNull::new(self.0.id().as_ptr() as *mut _)
+                            .unwrap(),
+                    ),
                 ),
-            ))
+            )
         })
     }
 }

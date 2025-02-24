@@ -41,7 +41,7 @@ pub use program::Program;
 pub use task::Task;
 pub use user_interface::UserInterface;
 
-use crate::core::{widget, Color};
+use crate::core::widget;
 use crate::futures::futures::channel::oneshot;
 
 use std::borrow::Cow;

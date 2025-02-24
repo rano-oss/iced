@@ -233,9 +233,7 @@ winit = { git = "https://github.com/pop-os/winit.git", tag = "iced-xdg-surface-0
 # winit = { path = "../../../winit" }
 
 [patch.crates-io]
-wayland-protocols = { path = "../wayland-rs/wayland-protocols/", features = [
-    "staging", "client"
-] }
+wayland-protocols = { path = "../wayland-rs/wayland-protocols/"}
 wayland-backend = { path = "../wayland-rs/wayland-backend/"}
 wayland-protocols-wlr = { path = "../wayland-rs/wayland-protocols-wlr/"}
 wayland-client = { path = "../wayland-rs/wayland-client"}

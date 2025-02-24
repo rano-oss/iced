@@ -76,7 +76,12 @@ use std::{
 };
 use wayland_protocols::{
     ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-    wp::viewporter::client::wp_viewport::WpViewport,
+    wp::{
+        text_input::v3::client::wp_text_input_v3::{
+            ChangeCause, ContentHint, ContentPurpose,
+        },
+        viewporter::client::wp_viewport::WpViewport,
+    },
 };
 use winit::{
     dpi::PhysicalSize, event::WindowEvent, event_loop::EventLoopProxy,
@@ -115,6 +120,10 @@ pub enum SctkEvent {
         touch_id: WlTouch,
         seat_id: WlSeat,
         surface: WlSurface,
+    },
+    InputMethodEvent {
+        variant: InputMethodEventVariant,
+        seat_id: WlSeat,
     },
     // TODO data device & touch
 
@@ -159,7 +168,10 @@ pub enum SctkEvent {
         /// the id of this popup
         id: WlSurface,
     },
-
+    InputMethodPopupEvent {
+        variant: InputPopupEventVariant,
+        id: WlSurface,
+    },
     //
     // output events
     //
@@ -231,6 +243,37 @@ pub enum KeyboardEventVariant {
 }
 
 #[derive(Debug, Clone)]
+pub enum InputMethodEventVariant {
+    Activate {
+        app_id: String,
+    },
+    Deactivate,
+    TextInputDestroyed {
+        app_id: String,
+    },
+    SurroundingText {
+        text: String,
+        cursor: u32,
+        anchor: u32,
+    },
+    TextChangeCause {
+        cause: ChangeCause,
+    },
+    ContentType {
+        hint: ContentHint,
+        purpose: ContentPurpose,
+    },
+    Done,
+    AvailableActions {
+        available_actions: Vec<u8>,
+    },
+    Press(KeyEvent),
+    Repeat(KeyEvent),
+    Release(KeyEvent),
+    Modifiers(Modifiers),
+}
+
+#[derive(Debug, Clone)]
 pub enum WindowEventVariant {
     Created(WlSurface, SurfaceId),
     /// <https://wayland.app/protocols/xdg-shell#xdg_toplevel:event:close>
@@ -267,6 +310,24 @@ pub enum PopupEventVariant {
     Configure(PopupConfigure, WlSurface, bool),
     /// <https://wayland.app/protocols/xdg-shell#xdg_popup:event:repositioned>
     RepositionionedPopup { token: u32 },
+    /// size
+    Size(u32, u32),
+    /// Scale Factor
+    ScaleFactorChanged(f64, Option<WpViewport>),
+}
+
+#[derive(Debug, Clone)]
+pub enum InputPopupEventVariant {
+    /// Input Method Popup Created
+    Created(
+        QueueHandle<SctkState>,
+        CommonSurface,
+        SurfaceId,
+        Arc<Mutex<Common>>,
+        WlDisplay,
+    ),
+    /// <https://wayland.app/protocols/wlr-layer-shell-unstable-v1#zwlr_layer_surface_v1:event:closed>
+    Done,
     /// size
     Size(u32, u32),
     /// Scale Factor
@@ -1086,6 +1147,12 @@ impl SctkEvent {
                     PopupEventVariant::ScaleFactorChanged(..) => {}
                 }
             }
+            SctkEvent::InputMethodPopupEvent { variant, id } => match variant{
+                InputPopupEventVariant::Created(_, _, _, _, _) => todo!(),
+                InputPopupEventVariant::Done => todo!(),
+                InputPopupEventVariant::Size(_, _) => {},
+                InputPopupEventVariant::ScaleFactorChanged(_, _) => {},
+            },
             SctkEvent::NewOutput { id, info } => events.push((
                 None,
                 iced_runtime::core::Event::PlatformSpecific(
@@ -1363,6 +1430,165 @@ impl SctkEvent {
                     ))
                 }
             }
+            SctkEvent::InputMethodEvent { variant, seat_id } => match variant {
+                InputMethodEventVariant::Activate { app_id } => events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            wayland::InputMethodEvent::Activate { app_id },
+                        )),
+                    ),
+                )),
+                InputMethodEventVariant::Deactivate => events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            wayland::InputMethodEvent::Deactivate,
+                        )),
+                    ),
+                )),
+                InputMethodEventVariant::TextInputDestroyed { app_id } => {
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethod(
+                                    wayland::InputMethodEvent::TextInputDestroyed {
+                                        app_id,
+                                    },
+                                ),
+                            ),
+                        ),
+                    ))
+                }
+                InputMethodEventVariant::SurroundingText {
+                    text,
+                    cursor,
+                    anchor,
+                } => events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            wayland::InputMethodEvent::SurroundingText { text, cursor, anchor },
+                        )),
+                    ),
+                )),
+                InputMethodEventVariant::TextChangeCause { cause } => events
+                    .push((
+                        None,
+                        iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethod(
+                                    wayland::InputMethodEvent::TextChangeCause { cause }
+                                ),
+                            ),
+                        ),
+                    )),
+                InputMethodEventVariant::ContentType { hint, purpose } => {
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethod(
+                                    wayland::InputMethodEvent::ContentType { hint, purpose }
+                                ),
+                            ),
+                        ),
+                    ))
+                }
+                InputMethodEventVariant::Done => events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            wayland::InputMethodEvent::Done,
+                        )),
+                    ),
+                )),
+                InputMethodEventVariant::AvailableActions {
+                    available_actions,
+                } => events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            wayland::InputMethodEvent::AvailableActions { available_actions },
+                        )),
+                    ),
+                )),
+                InputMethodEventVariant::Press(ke) => {
+                    let (key, location) = keysym_to_vkey_location(ke.keysym);
+                    let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
+                    let physical_key =
+                        crate::conversion::physical_key(physical_key);
+
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyPressed {
+                                key: key.clone(),
+                                location,
+                                text: ke.utf8.map(|s| s.into()),
+                                modifiers: modifiers_to_native(*modifiers),
+                                physical_key,
+                                modified_key: key, // TODO calculate without Ctrl?
+                            },
+                        ),
+                    ))
+                }
+                InputMethodEventVariant::Repeat(KeyEvent {
+                    keysym,
+                    utf8,
+                    raw_code,
+                    ..
+                }) => {
+                    let (key, location) = keysym_to_vkey_location(keysym);
+                    let physical_key = raw_keycode_to_physicalkey(raw_code);
+                    let physical_key =
+                        crate::conversion::physical_key(physical_key);
+
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyPressed {
+                                key: key.clone(),
+                                location,
+                                text: utf8.map(|s| s.into()),
+                                modifiers: modifiers_to_native(*modifiers),
+                                physical_key,
+                                modified_key: key, // TODO calculate without Ctrl?
+                            },
+                        ),
+                    ))
+                }
+                InputMethodEventVariant::Release(ke) => {
+                    let (k, location) = keysym_to_vkey_location(ke.keysym);
+                    let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
+                    let physical_key =
+                        crate::conversion::physical_key(physical_key);
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::KeyReleased {
+                                key: k.clone(),
+                                location,
+                                modifiers: modifiers_to_native(*modifiers),
+                                modified_key: k,
+                                physical_key,
+                            },
+                        ),
+                    ))
+                }
+                InputMethodEventVariant::Modifiers(new_mods) => {
+                    *modifiers = new_mods;
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::Keyboard(
+                            keyboard::Event::ModifiersChanged(
+                                modifiers_to_native(new_mods),
+                            ),
+                        ),
+                    ))
+                }
+            },
         }
     }
 }

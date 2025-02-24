@@ -7,6 +7,8 @@ use iced_core::window::Id;
 /// activation Actions
 pub mod activation;
 
+/// input method
+pub mod input_method;
 /// layer surface actions
 pub mod layer_surface;
 /// popup actions
@@ -26,6 +28,8 @@ pub enum Action {
     SessionLock(session_lock::Action),
     /// Overlap Notify
     OverlapNotify(Id, bool),
+    // input method
+    InputMethod(input_method::Action),
 }
 
 impl Debug for Action {
@@ -43,6 +47,9 @@ impl Debug for Action {
             }
             Action::OverlapNotify(id, _) => {
                 f.debug_tuple("OverlapNotify").field(id).finish()
+            }
+            Action::InputMethod(arg0) => {
+                f.debug_tuple("InputMethod").field(arg0).finish()
             }
         }
     }

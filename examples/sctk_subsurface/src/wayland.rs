@@ -1,10 +1,3 @@
-use futures_channel::mpsc;
-use iced::{
-    futures::{FutureExt, SinkExt},
-    platform_specific::shell::subsurface_widget::{Shmbuf, SubsurfaceBuffer},
-};
-use iced_runtime::futures::subscription;
-use rustix::{io::Errno, shm::ShmOFlags};
 use cctk::sctk::{
     reexports::{
         calloop_wayland_source::WaylandSource,
@@ -18,6 +11,13 @@ use cctk::sctk::{
     registry::{ProvidesRegistryState, RegistryState},
     shm::{Shm, ShmHandler},
 };
+use futures_channel::mpsc;
+use iced::{
+    futures::{FutureExt, SinkExt},
+    platform_specific::shell::subsurface_widget::{Shmbuf, SubsurfaceBuffer},
+};
+use iced_runtime::futures::subscription;
+use rustix::{io::Errno, shm::ShmOFlags};
 use std::{
     os::fd::OwnedFd,
     sync::Arc,

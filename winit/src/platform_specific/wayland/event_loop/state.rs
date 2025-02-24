@@ -1,6 +1,8 @@
 use crate::{
+    commands::input_method::get_input_method_popup,
     handlers::{
         activation::IcedRequestData,
+        input_method::{InputMethod, InputMethodManager},
         overlap::{OverlapNotificationV1, OverlapNotifyV1},
     },
     platform_specific::{
@@ -14,6 +16,7 @@ use crate::{
         Event,
     },
     program::Control,
+    sctk_event::InputPopupEventVariant,
 };
 use iced_futures::futures::channel::{mpsc, oneshot};
 use raw_window_handle::HasWindowHandle;
@@ -82,16 +85,13 @@ use iced_runtime::{
     platform_specific::{
         self,
         wayland::{
-            layer_surface::{IcedMargin, IcedOutput, SctkLayerSurfaceSettings},
-            popup::SctkPopupSettings,
-            Action,
+            input_method::InputMethodPopupSettings, layer_surface::{IcedMargin, IcedOutput, SctkLayerSurfaceSettings}, popup::SctkPopupSettings, Action
         },
     },
 };
 use wayland_protocols::{
     wp::{
-        fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1,
-        viewporter::client::wp_viewport::WpViewport,
+        fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1, input_method::v3::client::wp_input_method_v3::WpInputMethodV3, viewporter::client::wp_viewport::WpViewport
     },
     xdg::shell::client::xdg_surface::XdgSurface,
 };
@@ -114,6 +114,7 @@ pub(crate) struct SctkSeat {
     pub(crate) active_icon: Option<CursorIcon>,
     // Cursor icon set by application
     pub(crate) icon: Option<CursorIcon>,
+    pub(crate) input_method: WpInputMethodV3,
 }
 
 impl SctkSeat {
@@ -166,6 +167,7 @@ pub enum PopupParent {
     LayerSurface(WlSurface),
     Window(WlSurface),
     Popup(WlSurface),
+    InputMethodPopup(WlSurface),
 }
 
 impl PopupParent {
@@ -173,7 +175,8 @@ impl PopupParent {
         match self {
             PopupParent::LayerSurface(s)
             | PopupParent::Window(s)
-            | PopupParent::Popup(s) => s,
+            | PopupParent::Popup(s)
+            | PopupParent::InputMethodPopup(s) => s,
         }
     }
 }
@@ -273,6 +276,35 @@ pub struct SctkPopupData {
     pub(crate) positioner: Arc<XdgPositioner>,
 }
 
+#[derive(Debug)]
+pub struct InputMethodPopup {
+    pub(crate) popup: Popup,
+    pub(crate) last_configure: Option<PopupConfigure>,
+    pub(crate) _pending_requests:
+        Vec<platform_specific::wayland::popup::Action>,
+    pub(crate) data: InputMethodPopupData,
+    pub(crate) common: Arc<Mutex<Common>>,
+    pub(crate) wp_fractional_scale: Option<WpFractionalScaleV1>,
+}
+
+#[derive(Debug)]
+pub struct InputMethodPopupData {
+    pub(crate) id: core::window::Id,
+    pub(crate) positioner: Arc<XdgPositioner>,
+}
+
+impl InputMethodPopup {
+    pub(crate) fn set_size(&mut self, w: u32, h: u32, token: u32) {
+        // update geometry
+        self.popup
+            .xdg_surface()
+            .set_window_geometry(0, 0, w as i32, h as i32);
+        // update positioner
+        self.data.positioner.set_size(w as i32, h as i32);
+        self.popup.reposition(&self.data.positioner, token);
+    }
+}
+
 pub struct SctkWindow {
     pub(crate) window: Arc<dyn winit::window::Window>,
     pub(crate) id: core::window::Id,
@@ -347,6 +379,7 @@ pub struct SctkState {
     pub(crate) windows: Vec<SctkWindow>,
     pub(crate) layer_surfaces: Vec<SctkLayerSurface>,
     pub(crate) popups: Vec<SctkPopup>,
+    pub(crate) input_method_popup: Option<InputMethodPopup>,
     pub(crate) lock_surfaces: Vec<SctkLockSurface>,
     pub(crate) _kbd_focus: Option<WlSurface>,
     pub(crate) touch_points: HashMap<touch::Finger, (WlSurface, Point)>,
@@ -393,6 +426,7 @@ pub struct SctkState {
 
     pub(crate) activation_token_ctr: u32,
     pub(crate) token_senders: HashMap<u32, oneshot::Sender<Option<String>>>,
+    pub(crate) input_method_manager: InputMethodManager,
 }
 
 /// An error that occurred while running an application.
@@ -564,6 +598,15 @@ impl SctkState {
                 PopupParent::Popup(parent.popup.wl_surface().clone()),
                 parent.data.toplevel.clone(),
             )
+        } else if let Some(parent) = self
+            .input_method_popup
+            .as_ref()
+            .filter(|p| p.data.id == settings.parent)
+        {
+            (
+                PopupParent::Popup(parent.popup.wl_surface().clone()),
+                parent.popup.wl_surface().clone(),
+            )
         } else {
             return Err(PopupCreationError::ParentMissing);
         };
@@ -665,6 +708,27 @@ impl SctkState {
                     .map_err(PopupCreationError::PopupCreationFailed)?,
                 )
             }
+            PopupParent::InputMethodPopup(parent) => {
+                let Some(parent_xdg) = self
+                    .input_method_popup
+                    .as_ref()
+                    .filter(|p| p.popup.wl_surface() == parent)
+                    .map(|p| p.popup.xdg_surface())
+                else {
+                    return Err(PopupCreationError::ParentMissing);
+                };
+                (
+                    parent,
+                    Popup::from_surface(
+                        Some(parent_xdg),
+                        &positioner,
+                        &self.queue_handle,
+                        wl_surface.clone(),
+                        &self.xdg_shell_state,
+                    )
+                    .map_err(PopupCreationError::PopupCreationFailed)?,
+                )
+            }
         };
         if grab {
             if let Some(s) = self.seats.first() {
@@ -732,6 +796,107 @@ impl SctkState {
             toplevel.clone(),
             CommonSurface::Popup(popup.clone(), positioner.clone()),
             common,
+        ))
+    }
+
+    pub fn get_input_method_popup(
+        &mut self,
+        settings: InputMethodPopupSettings,
+    ) -> Result<
+        (
+            core::window::Id,
+            WlSurface,
+            CommonSurface,
+            Arc<Mutex<Common>>,
+            Popup,
+        ),
+        PopupCreationError,
+    > {
+        let seat = self.seats.first().expect("Cannot find seat"); // TODO: fix to return error
+        let size = if settings.positioner.size.is_none() {
+            log::info!("No configured popup size");
+            (1, 1)
+        } else {
+            settings.positioner.size.unwrap()
+        };
+
+        let positioner = XdgPositioner::new(&self.xdg_shell_state)
+            .map_err(PopupCreationError::PositionerCreationFailed)?;
+        positioner.set_anchor(settings.positioner.anchor);
+        let data: &InputMethod = seat.input_method.data().unwrap();
+        let cursor_rect = data.cursor_rectangle.lock().unwrap();
+        positioner.set_anchor_rect(
+            cursor_rect.x,
+            cursor_rect.y,
+            cursor_rect.width,
+            cursor_rect.height,
+        );
+        if let Ok(constraint_adjustment) =
+            settings.positioner.constraint_adjustment.try_into()
+        {
+            positioner.set_constraint_adjustment(constraint_adjustment);
+        }
+        positioner.set_gravity(settings.positioner.gravity);
+        positioner.set_offset(
+            settings.positioner.offset.0,
+            settings.positioner.offset.1,
+        );
+        if settings.positioner.reactive {
+            positioner.set_reactive();
+        }
+        positioner.set_size(size.0 as i32, size.1 as i32);
+        let wl_surface =
+            self.compositor_state.create_surface(&self.queue_handle);
+        _ = self.id_map.insert(wl_surface.id(), settings.id.clone());
+        let popup = Popup::from_surface(
+            None,
+            &positioner,
+            &self.queue_handle,
+            wl_surface.clone(),
+            &self.xdg_shell_state,
+        )
+        .map_err(PopupCreationError::PopupCreationFailed)?;
+        popup.xdg_surface().set_window_geometry(
+            0,
+            0,
+            size.0 as i32,
+            size.1 as i32,
+        );
+        _ = wl_surface.frame(&self.queue_handle, wl_surface.clone());
+        wl_surface.commit();
+
+        let wp_viewport = self.viewporter_state.as_ref().map(|state| {
+            let viewport =
+                state.get_viewport(popup.wl_surface(), &self.queue_handle);
+            viewport.set_destination(size.0 as i32, size.1 as i32);
+            viewport
+        });
+        let wp_fractional_scale =
+            self.fractional_scaling_manager.as_ref().map(|fsm| {
+                fsm.fractional_scaling(popup.wl_surface(), &self.queue_handle)
+            });
+        let mut common: Common = LogicalSize::new(size.0, size.1).into();
+        common.wp_viewport = wp_viewport;
+        let common = Arc::new(Mutex::new(common));
+        let positioner = Arc::new(positioner);
+        seat.input_method.get_input_method_popup(popup.xdg_popup());
+        self.input_method_popup = Some(InputMethodPopup {
+            popup: popup.clone(),
+            last_configure: None,
+            _pending_requests: Default::default(),
+            data: InputMethodPopupData {
+                id: settings.id,
+                positioner: positioner.clone(),
+            },
+            common: common.clone(),
+            wp_fractional_scale,
+        });
+        Ok((
+            settings.id,
+            wl_surface.clone(),
+            CommonSurface::Popup(popup.clone(), positioner.clone()),
+            common,
+            popup.clone(),
         ))
     }
 
@@ -840,6 +1005,7 @@ impl SctkState {
         });
         Ok((id, CommonSurface::Layer(layer_surface), common))
     }
+
     pub fn get_lock_surface(
         &mut self,
         id: core::window::Id,
@@ -1061,7 +1227,7 @@ impl SctkState {
                     let mut to_destroy = vec![sctk_popup];
                     while let Some(popup_to_destroy) = to_destroy.last() {
                         match popup_to_destroy.data.parent.clone() {
-                            PopupParent::LayerSurface(_) | PopupParent::Window(_) => {
+                            PopupParent::LayerSurface(_) | PopupParent::Window(_) | PopupParent::InputMethodPopup(_) => {
                                 break;
                             }
                             PopupParent::Popup(popup_to_destroy_first) => {
@@ -1207,6 +1373,90 @@ impl SctkState {
                 } else {
                     tracing::error!("Overlap notify subscription cannot be created for surface. No matching layer surface found.");
                 }
+            },
+            Action::InputMethod(action) => match action {
+                platform_specific::wayland::input_method::Action::Commit => {
+                    if let Some(seat) = self.seats.first() {
+                        let data: &InputMethod = seat.input_method.data().unwrap();
+                        seat.input_method.commit(*data.serial.lock().unwrap())
+                    }
+                },
+                platform_specific::wayland::input_method::Action::SetPreeditString { text, cursor_begin, cursor_end } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_preedit_string(text, cursor_begin, cursor_end)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::SetString { text } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_string(text)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::DeleteSurroundingText { before_length, after_length } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.delete_surrounding_text(before_length, after_length)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::SetAction { action } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_action(action)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::SetLanguage { language } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_language(language)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::SetPreeditCommitMode { mode } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_preedit_commit_mode(mode)
+                    }
+                }
+                platform_specific::wayland::input_method::Action::SetPreeditStyle { begin, end, underline, style, color } => {
+                    if let Some(seat) = self.seats.first() {
+                        seat.input_method.set_preedit_style(begin, end, underline, style, color)
+                    }
+                },
+                platform_specific::wayland::input_method::Action::Popup { popup } => {
+                    match self.get_input_method_popup(popup) {
+                        Ok((id, surface, common_surface, common, popup)) => {
+                            let wl_surface = common_surface.wl_surface().clone();
+                            receive_frame(&mut self.frame_status, &wl_surface);
+                            send_event(&self.events_sender, &self.proxy,
+                                SctkEvent::InputMethodPopupEvent {
+                                    variant: InputPopupEventVariant::Created(
+                                        self.queue_handle.clone(), common_surface, id, common, self.connection.display()),
+                                    id: wl_surface
+                                });
+                        },
+                        Err(err) => {
+                            log::error!("Failed to create popup. {err:?}");
+                        }
+                    };
+                },
+                platform_specific::wayland::input_method::Action::Destroy { id } => {
+                    if let Some(im_popup) = self.input_method_popup.take() {
+                        if let Some(destroyed) = self.id_map.remove(&im_popup.popup.wl_surface().id()) {
+                            _ = self.destroyed.insert(destroyed);
+                        }
+                        send_event(&self.events_sender, &self.proxy,
+                            SctkEvent::InputMethodPopupEvent {
+                                variant: InputPopupEventVariant::Done,
+                                id: im_popup.popup.wl_surface().clone()
+                            }
+                        );
+                    }
+                },
+                platform_specific::wayland::input_method::Action::Size { id, width, height } => {
+                    if let Some(im_popup) = self.input_method_popup.as_mut() {
+                        im_popup.set_size(width, height, TOKEN_CTR.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+                        let surface = im_popup.popup.wl_surface().clone();
+                        _ = send_event(&self.events_sender, &self.proxy,
+                            SctkEvent::InputMethodPopupEvent {
+                                variant: InputPopupEventVariant::Size(width, height),
+                                id: surface
+                            });
+                    }
+                },
             },
         };
         Ok(())

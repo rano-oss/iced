@@ -6,7 +6,7 @@ pub mod state;
 use crate::platform_specific::SurfaceIdWrapper;
 use crate::{
     futures::futures::channel::mpsc,
-    handlers::overlap::OverlapNotifyV1,
+    handlers::{input_method::InputMethodManager, overlap::OverlapNotifyV1},
     platform_specific::wayland::{
         handlers::{
             wp_fractional_scaling::FractionalScalingManager,
@@ -191,6 +191,9 @@ impl SctkEventLoop {
                     }
                 };
 
+            let input_method_manager = InputMethodManager::new(&globals, &qh)
+                .expect("Failed to initialize input method manager");
+
             let mut state = Self {
                 event_loop,
                 state: SctkState {
@@ -228,6 +231,7 @@ impl SctkEventLoop {
                     windows: Vec::new(),
                     layer_surfaces: Vec::new(),
                     popups: Vec::new(),
+                    input_method_popup: None,
                     lock_surfaces: Vec::new(),
                     _kbd_focus: None,
                     touch_points: HashMap::new(),
@@ -245,6 +249,8 @@ impl SctkEventLoop {
                     activation_token_ctr: 0,
                     token_senders: HashMap::new(),
                     overlap_notifications: HashMap::new(),
+                    //TODO: Feature flag
+                    input_method_manager,
                 },
                 _features: Default::default(),
             };
