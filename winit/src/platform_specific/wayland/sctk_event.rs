@@ -1147,9 +1147,188 @@ impl SctkEvent {
                     PopupEventVariant::ScaleFactorChanged(..) => {}
                 }
             }
-            SctkEvent::InputMethodPopupEvent { variant, id } => match variant{
-                InputPopupEventVariant::Created(_, _, _, _, _) => todo!(),
-                InputPopupEventVariant::Done => todo!(),
+            SctkEvent::InputMethodPopupEvent { variant, id: surface } => match variant{
+                InputPopupEventVariant::Created(
+                    queue_handle,
+                    surface,
+                    surface_id,
+                    common,
+                    display,
+                ) => {
+                    let wl_surface = surface.wl_surface();
+                    let wrapper = SurfaceIdWrapper::Popup(surface_id);
+                    _ = surface_ids
+                        .insert(wl_surface.id(), wrapper.clone());
+                    let sctk_winit = SctkWinitWindow::new(
+                        sctk_tx.clone(),
+                        common,
+                        wrapper,
+                        surface,
+                        display,
+                        queue_handle,
+                    );
+                    #[cfg(feature = "a11y")]
+                    {
+                        use crate::a11y::*;
+                        use iced_accessibility::accesskit::{
+                            ActivationHandler, NodeBuilder, NodeId, Role,
+                            Tree, TreeUpdate,
+                        };
+                        use iced_accessibility::accesskit_winit::Adapter;
+
+                        let node_id =
+                            iced_runtime::core::id::window_node_id();
+
+                        let activation_handler = WinitActivationHandler {
+                            proxy: control_sender.clone(),
+                            title: String::new(),
+                        };
+
+                        let action_handler = WinitActionHandler {
+                            id: surface_id,
+                            proxy: control_sender.clone(),
+                        };
+
+                        let deactivation_handler =
+                            WinitDeactivationHandler {
+                                proxy: control_sender.clone(),
+                            };
+                        _ = adapters.insert(
+                            surface_id,
+                            (
+                                node_id,
+                                Adapter::with_direct_handlers(
+                                    sctk_winit.as_ref(),
+                                    activation_handler,
+                                    action_handler,
+                                    deactivation_handler,
+                                ),
+                            ),
+                        );
+                    }
+
+                    if clipboard.window_id().is_none() {
+                        *clipboard = Clipboard::connect(
+                            sctk_winit.clone(),
+                            crate::clipboard::ControlSender {
+                                sender: control_sender.clone(),
+                                proxy: proxy.clone(),
+                            },
+                        );
+                    }
+
+                    let window = window_manager.insert(
+                        surface_id, sctk_winit, program, compositor,
+                        false, // TODO do we want to get this value here?
+                        0,
+                    );
+                    let logical_size = window.size();
+
+                    let mut ui = crate::program::build_user_interface(
+                        program,
+                        user_interface::Cache::default(),
+                        &mut window.renderer,
+                        logical_size,
+                        debug,
+                        surface_id,
+                        window.raw.clone(),
+                        window.prev_dnd_destination_rectangles_count,
+                        clipboard,
+                    );
+
+                    _ = ui.update(
+                        &vec![iced_runtime::core::Event::PlatformSpecific(
+                            iced_runtime::core::event::PlatformSpecific::Wayland(
+                                iced_runtime::core::event::wayland::Event::RequestResize,
+                            ),
+                        )],
+                        window.state.cursor(),
+                        &mut window.renderer,
+                        clipboard,
+                        &mut Vec::new(),
+                    );
+
+                    if let Some(requested_size) = clipboard
+                        .requested_logical_size
+                        .lock()
+                        .unwrap()
+                        .take()
+                    {
+                        let requested_physical_size =
+                            winit::dpi::PhysicalSize::new(
+                                (requested_size.width as f64
+                                    * window.state.scale_factor())
+                                .ceil()
+                                    as u32,
+                                (requested_size.height as f64
+                                    * window.state.scale_factor())
+                                .ceil()
+                                    as u32,
+                            );
+                        let physical_size = window.state.physical_size();
+                        if requested_physical_size.width
+                            != physical_size.width
+                            || requested_physical_size.height
+                                != physical_size.height
+                        {
+                            // FIXME what to do when we are stuck in a configure event/resize request loop
+                            // We don't have control over how winit handles this.
+                            window.resize_enabled = true;
+
+                            let s = winit::dpi::Size::Physical(
+                                requested_physical_size,
+                            );
+                            _ = window.raw.request_surface_size(s);
+                            window.raw.set_min_surface_size(Some(s));
+                            window.raw.set_max_surface_size(Some(s));
+                            window.state.synchronize(
+                                &program,
+                                surface_id,
+                                window.raw.as_ref(),
+                            );
+                        }
+                    }
+
+                    let _ = user_interfaces.insert(surface_id, ui);
+                },
+                InputPopupEventVariant::Done => {
+                    if let Some(e) =
+                        surface_ids.remove(&surface.id()).map(|id| {
+                            if let Some(w) =
+                                window_manager.remove(id.inner())
+                            {
+                                clipboard.register_dnd_destination(
+                                    DndSurface(Arc::new(Box::new(
+                                        w.raw.clone(),
+                                    ))),
+                                    Vec::new(),
+                                );
+                                if clipboard
+                                    .window_id()
+                                    .is_some_and(|id| w.raw.id() == id)
+                                {
+                                    *clipboard = Clipboard::unconnected();
+                                }
+                            }
+                            _ = user_interfaces.remove(&id.inner());
+
+                            (
+                                Some(id.inner()),
+                                iced_runtime::core::Event::PlatformSpecific(
+                                    PlatformSpecific::Wayland(
+                                        wayland::Event::Popup(
+                                            PopupEvent::Done,
+                                            surface,
+                                            id.inner(),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        })
+                    {
+                        events.push(e)
+                    }
+                },
                 InputPopupEventVariant::Size(_, _) => {},
                 InputPopupEventVariant::ScaleFactorChanged(_, _) => {},
             },

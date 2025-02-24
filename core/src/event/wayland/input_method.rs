@@ -28,10 +28,4 @@ pub enum InputMethodEvent {
     AvailableActions {
         available_actions: Vec<u8>,
     },
-    // CursorRectangle {
-    //     x: i32,
-    //     y: i32,
-    //     width: i32,
-    //     height: i32,
-    // },
 }
