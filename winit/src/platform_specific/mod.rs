@@ -176,6 +176,7 @@ pub(crate) fn handle_event<'a, P, C>(
         window::Id,
         (u64, iced_accessibility::accesskit_winit::Adapter),
     >,
+    id: Option<String>,
 ) where
     P: Program,
     C: Compositor<Renderer = P::Renderer>,
@@ -194,6 +195,7 @@ pub(crate) fn handle_event<'a, P, C>(
                 clipboard,
                 #[cfg(feature = "a11y")]
                 adapters,
+                id,
             );
         }
     }

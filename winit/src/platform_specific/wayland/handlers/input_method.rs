@@ -17,7 +17,7 @@ use wayland_client::{
     delegate_dispatch,
     globals::{BindError, GlobalList},
     protocol::{
-        wl_keyboard,
+        wl_keyboard::{self, KeyState},
         wl_seat::{self, WlSeat},
         wl_surface,
     },
@@ -25,7 +25,7 @@ use wayland_client::{
 };
 use wayland_protocols::wp::input_method::v3::client::{
     wp_input_method_manager_v3::WpInputMethodManagerV3,
-    wp_input_method_v3::{self, WpInputMethodV3},
+    wp_input_method_v3::{self, KeyForwardMode, WpInputMethodV3},
 };
 use xkbcommon::xkb;
 use xkeysym::{KeyCode, Keysym};
@@ -42,7 +42,6 @@ pub(crate) struct RepeatedKey {
     pub(crate) key: KeyEvent,
     /// Whether this is the first event of the repeat sequence.
     pub(crate) is_first: bool,
-    pub(crate) surface: wl_surface::WlSurface,
 }
 
 pub(crate) struct RepeatData<T> {
@@ -164,6 +163,7 @@ unsafe impl<T> Sync for KeyboardData<T> {}
 #[derive(Debug)]
 pub struct InputMethodManager {
     manager: WpInputMethodManagerV3,
+    app_id: String,
 }
 
 #[derive(Debug, Default)]
@@ -179,21 +179,24 @@ pub struct InputMethod {
     pub cursor_rectangle: Mutex<Rectangle>,
     seat: WlSeat,
     pub serial: Mutex<u32>,
+    pub pressed_key_serial: Arc<Mutex<(u32, KeyForwardMode)>>,
+    pub released_key_serial: Mutex<(u32, KeyForwardMode)>,
 }
 
 impl InputMethodManager {
     pub fn new(
         globals: &GlobalList,
         queue_handle: &QueueHandle<SctkState>,
+        id: Option<String>,
     ) -> Result<Self, BindError> {
         let manager = globals.bind(queue_handle, 1..=1, GlobalData)?;
-        Ok(Self { manager })
+        let app_id = id.expect("Application Id must be set for input method");
+        Ok(Self { manager, app_id })
     }
 
     pub fn new_input_method(
         &self,
         seat: &WlSeat,
-        app_id: String,
         queue_handle: &QueueHandle<SctkState>,
         loop_handle: LoopHandle<'static, SctkState>,
     ) -> WpInputMethodV3 {
@@ -203,9 +206,17 @@ impl InputMethodManager {
             cursor_rectangle: Mutex::new(Rectangle::default()),
             seat: seat.clone(),
             serial: 0.into(),
+            pressed_key_serial: Arc::new(
+                (0, KeyForwardMode::NonRepeating).into(),
+            ),
+            released_key_serial: (0, KeyForwardMode::NonRepeating).into(),
         };
-        self.manager
-            .get_input_method(seat, app_id, queue_handle, data)
+        self.manager.get_input_method(
+            seat,
+            self.app_id.clone(),
+            queue_handle,
+            data,
+        )
     }
 }
 
@@ -441,17 +452,17 @@ impl Dispatch<WpInputMethodV3, InputMethod, SctkState> for InputMethodManager {
 
                             match key_state {
                                 wl_keyboard::KeyState::Released => {
+                                    *data.released_key_serial.lock().unwrap() =
+                                        (serial, KeyForwardMode::NonRepeating);
+                                    let mut repeat_data =
+                                        udata.repeat_data.lock().unwrap();
+                                    if Some(event.raw_code)
+                                        == repeat_data
+                                            .current_repeat
+                                            .as_ref()
+                                            .map(|r| r.key.raw_code)
                                     {
-                                        let mut repeat_data =
-                                            udata.repeat_data.lock().unwrap();
-                                        if Some(event.raw_code)
-                                            == repeat_data
-                                                .current_repeat
-                                                .as_ref()
-                                                .map(|r| r.key.raw_code)
-                                        {
-                                            repeat_data.current_repeat = None;
-                                        }
+                                        repeat_data.current_repeat = None;
                                     }
                                     // TODO: release key data
                                     state.sctk_events.push(
@@ -466,114 +477,94 @@ impl Dispatch<WpInputMethodV3, InputMethod, SctkState> for InputMethodManager {
                                 }
 
                                 wl_keyboard::KeyState::Pressed => {
-                                    {
-                                        let mut repeat_data =
-                                            udata.repeat_data.lock().unwrap();
-                                        let state_guard =
-                                            udata.xkb_state.lock().unwrap();
-                                        let key_repeats = state_guard
-                                            .as_ref()
-                                            .map(|guard| {
-                                                guard.get_keymap().key_repeats(
-                                                    KeyCode::new(
-                                                        event.raw_code + 8,
-                                                    ),
-                                                )
-                                            })
-                                            .unwrap_or_default();
-                                        if key_repeats {
-                                            // Cancel the previous timer / repeat.
-                                            if let Some(token) =
-                                                repeat_data.repeat_token.take()
-                                            {
-                                                &repeat_data
-                                                    .loop_handle
-                                                    .remove(token);
-                                            }
-
-                                            let surface = match udata
-                                                .focus
-                                                .lock()
-                                                .unwrap()
-                                                .as_ref()
-                                                .cloned()
-                                            {
-                                                Some(surface) => surface,
-
-                                                None => {
-                                                    log::warn!(
-                                                "wl_keyboard::key with no focused surface");
-                                                    return;
-                                                }
-                                            };
-
-                                            // Update the current repeat key.
-                                            let _ = repeat_data
-                                                .current_repeat
-                                                .replace(RepeatedKey {
-                                                    key: event.clone(),
-                                                    is_first: true,
-                                                    surface,
-                                                });
-
-                                            let (delay, rate) =
-                                                match repeat_data.repeat_info {
-                                                    RepeatInfo::Disable => {
-                                                        return
-                                                    }
-                                                    RepeatInfo::Repeat {
-                                                        delay,
-                                                        rate,
-                                                    } => (delay, rate),
-                                                };
-                                            let gap = Duration::from_micros(
-                                                1_000_000 / rate.get() as u64,
-                                            );
-                                            let timer = Timer::from_duration(
-                                                Duration::from_millis(
-                                                    delay as u64,
+                                    let mut repeat_data =
+                                        udata.repeat_data.lock().unwrap();
+                                    let state_guard =
+                                        udata.xkb_state.lock().unwrap();
+                                    let mut key_serial =
+                                        data.pressed_key_serial.lock().unwrap();
+                                    *key_serial =
+                                        (serial, KeyForwardMode::NonRepeating);
+                                    let key_repeats = state_guard
+                                        .as_ref()
+                                        .map(|guard| {
+                                            guard.get_keymap().key_repeats(
+                                                KeyCode::new(
+                                                    event.raw_code + 8,
                                                 ),
-                                            );
-                                            let repeat_data2 =
-                                                udata.repeat_data.clone();
+                                            )
+                                        })
+                                        .unwrap_or_default();
+                                    if key_repeats {
+                                        // Cancel the previous timer / repeat.
+                                        if let Some(token) =
+                                            repeat_data.repeat_token.take()
+                                        {
+                                            &repeat_data
+                                                .loop_handle
+                                                .remove(token);
+                                        }
 
-                                            // Start the timer.
-                                            let im = proxy.clone();
-                                            let seat_id_2 = seat_id.clone();
-                                            if let Ok(token) = &repeat_data.loop_handle.insert_source(
-                                                timer,
-                                                move |_, _, state| {
-                                                    let mut repeat_data =
-                                                        repeat_data2.lock().unwrap();
+                                        // Update the current repeat key.
+                                        let _ = repeat_data
+                                            .current_repeat
+                                            .replace(RepeatedKey {
+                                                key: event.clone(),
+                                                is_first: true,
+                                            });
 
-                                                    let key = &mut repeat_data.current_repeat;
-                                                    if key.is_none() {
-                                                        return TimeoutAction::Drop;
-                                                    }
-                                                    let key = key.as_mut().unwrap();
-                                                    // If surface was closed while focused, no `Leave`
-                                                    // event occurred.
-                                                    if !key.surface.is_alive() {
-                                                        return TimeoutAction::Drop;
-                                                    }
-                                                    key.key.time += if key.is_first {
-                                                        key.is_first = false;
-                                                        delay
-                                                    } else {
-                                                        gap.as_millis() as u32
-                                                    };
-                                                    if let Some(my_seat) = state
-                                                        .seats
-                                                        .iter_mut()
-                                                        .find(|s| s.seat == seat_id_2)
-                                                    {
-                                                        state.sctk_events.push(SctkEvent::InputMethodEvent { variant: InputMethodEventVariant::Repeat(key.key.clone()), seat_id: seat_id_2.clone() });
-                                                    }
-                                                    TimeoutAction::ToDuration(gap)
-                                                },
-                                            ) {
-                                                repeat_data.repeat_token = Some(*token);
-                                            }
+                                        let (delay, rate) =
+                                            match repeat_data.repeat_info {
+                                                RepeatInfo::Disable => return,
+                                                RepeatInfo::Repeat {
+                                                    delay,
+                                                    rate,
+                                                } => (delay, rate),
+                                            };
+                                        let gap = Duration::from_micros(
+                                            1_000_000 / rate.get() as u64,
+                                        );
+                                        let timer = Timer::from_duration(
+                                            Duration::from_millis(delay as u64),
+                                        );
+                                        let repeat_data2 =
+                                            udata.repeat_data.clone();
+                                        let key_serial2 =
+                                            data.pressed_key_serial.clone();
+
+                                        // Start the timer.
+                                        let im = proxy.clone();
+                                        let seat_id_2 = seat_id.clone();
+                                        if let Ok(token) = &repeat_data.loop_handle.insert_source(
+                                            timer,
+                                            move |_, _, state| {
+                                                let mut repeat_data =
+                                                    repeat_data2.lock().unwrap();
+                                                let mut key_serial = key_serial2.lock().unwrap();
+
+                                                let key = &mut repeat_data.current_repeat;
+                                                if key.is_none() {
+                                                    return TimeoutAction::Drop;
+                                                }
+                                                let key = key.as_mut().unwrap();
+                                                key.key.time += if key.is_first {
+                                                    key.is_first = false;
+                                                    delay
+                                                } else {
+                                                    gap.as_millis() as u32
+                                                };
+                                                if let Some(my_seat) = state
+                                                    .seats
+                                                    .iter_mut()
+                                                    .find(|s| s.seat == seat_id_2)
+                                                {
+                                                    *key_serial = (serial, KeyForwardMode::Repeating);
+                                                    state.sctk_events.push(SctkEvent::InputMethodEvent { variant: InputMethodEventVariant::Repeat(key.key.clone()), seat_id: seat_id_2.clone() });
+                                                }
+                                                TimeoutAction::ToDuration(gap)
+                                            },
+                                        ) {
+                                            repeat_data.repeat_token = Some(*token);
                                         }
                                     }
                                     state.sctk_events.push(

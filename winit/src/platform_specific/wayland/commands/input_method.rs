@@ -8,13 +8,13 @@ use iced_runtime::{
     },
     task, Action, Task,
 };
+use wayland_client::protocol::wl_keyboard::KeyState;
 use wayland_protocols::wp::text_input::v3::client::wp_text_input_v3::{
     Action as IMAction, CommitMode, PreeditColorHint, PreeditStyle,
     PreeditUnderline,
 };
 
 /// TODO: fix this to input method popup request
-/// <https://wayland.app/protocols/wlr-layer-shell-unstable-v1#zwlr_layer_surface_v1:request:get_popup>
 pub fn get_input_method_popup<Message>(
     popup: InputMethodPopupSettings,
 ) -> Task<Message> {
@@ -133,6 +133,14 @@ pub fn set_preedit_style<Message>(
                 style,
                 color,
             },
+        )),
+    ))
+}
+
+pub fn forward_key<Message>(key_state: KeyState) -> Task<Message> {
+    task::effect(Action::PlatformSpecific(
+        platform_specific::Action::Wayland(wayland::Action::InputMethod(
+            wayland::input_method::Action::ForwardKey { key_state },
         )),
     ))
 }

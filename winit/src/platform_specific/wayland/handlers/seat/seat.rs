@@ -25,11 +25,8 @@ impl SeatHandler for SctkState {
             id: seat.clone(),
         });
 
-        //TODO: Feature flag
         let input_method = self.input_method_manager.new_input_method(
             &seat,
-            //app_id,
-            "TODO_app_id_from_info".to_string(),
             &self.queue_handle,
             self.loop_handle.clone(),
         );
@@ -47,7 +44,6 @@ impl SeatHandler for SctkState {
             last_touch_down: None,
             icon: None,
             active_icon: None,
-            //TODO: feature flag
             input_method,
         });
     }
@@ -62,11 +58,8 @@ impl SeatHandler for SctkState {
         let my_seat = match self.seats.iter_mut().find(|s| s.seat == seat) {
             Some(s) => s,
             None => {
-                //TODO: Feature flag
                 let input_method = self.input_method_manager.new_input_method(
                     &seat,
-                    // app_id,
-                    "TODO_app_id_from_info".to_string(),
                     &self.queue_handle,
                     self.loop_handle.clone(),
                 );

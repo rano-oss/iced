@@ -1,3 +1,4 @@
+use cctk::wayland_client::protocol::wl_keyboard::KeyState;
 use iced_core::{layout::Limits, window::Id};
 use wayland_protocols::{
     wp::text_input::v3::client::wp_text_input_v3::{
@@ -90,5 +91,8 @@ pub enum Action {
         width: u32,
         /// height
         height: u32,
+    },
+    ForwardKey {
+        key_state: KeyState,
     },
 }

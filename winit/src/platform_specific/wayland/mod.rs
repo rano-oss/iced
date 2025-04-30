@@ -76,6 +76,7 @@ impl PlatformSpecific {
         tx: mpsc::UnboundedSender<Control>,
         raw: winit::event_loop::EventLoopProxy,
         display: OwnedDisplayHandle,
+        id: Option<String>,
     ) -> Self {
         self.wayland.winit_event_sender = Some(tx);
         self.wayland.conn = match display.raw_display_handle() {
@@ -106,6 +107,7 @@ impl PlatformSpecific {
                 self.wayland.winit_event_sender.clone().unwrap(),
                 self.wayland.proxy.clone().unwrap(),
                 self.wayland.display_handle.clone().unwrap(),
+                id,
             )
             .ok();
         self
@@ -122,6 +124,7 @@ impl PlatformSpecific {
                     self.wayland.winit_event_sender.clone().unwrap(),
                     self.wayland.proxy.clone().unwrap(),
                     self.wayland.display_handle.clone().unwrap(),
+                    None,
                 )
                 .ok();
         }
@@ -153,6 +156,7 @@ impl WaylandSpecific {
             window::Id,
             (u64, iced_accessibility::accesskit_winit::Adapter),
         >,
+        id: Option<String>,
     ) where
         P: Program,
         C: Compositor<Renderer = P::Renderer>,
@@ -200,6 +204,7 @@ impl WaylandSpecific {
                     subsurface_state,
                     #[cfg(feature = "a11y")]
                     adapters,
+                    id,
                 );
             }
         };

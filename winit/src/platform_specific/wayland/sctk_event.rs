@@ -393,6 +393,7 @@ impl SctkEvent {
             window::Id,
             (u64, iced_accessibility::accesskit_winit::Adapter),
         >,
+        id: Option<String>,
     ) where
         P: Program,
         C: Compositor<Renderer = P::Renderer>,
@@ -1698,7 +1699,6 @@ impl SctkEvent {
                     let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
                         crate::conversion::physical_key(physical_key);
-
                     events.push((
                         None,
                         iced_runtime::core::Event::Keyboard(

@@ -233,6 +233,7 @@ where
         control_sender.clone(),
         event_loop.owned_display_handle(),
         is_daemon,
+        settings.id.clone(),
     ));
 
     let context = task::Context::from_waker(task::noop_waker_ref());
@@ -702,6 +703,7 @@ async fn run_instance<'a, P, C>(
     mut control_sender: mpsc::UnboundedSender<Control>,
     display_handle: OwnedDisplayHandle,
     is_daemon: bool,
+    id: Option<String>,
 ) where
     P: Program + 'static,
     C: Compositor<Renderer = P::Renderer> + 'static,
@@ -724,6 +726,7 @@ async fn run_instance<'a, P, C>(
             control_sender.clone(),
             proxy.raw.clone(),
             display_handle,
+            id,
         );
     }
 
@@ -1555,9 +1558,10 @@ async fn run_instance<'a, P, C>(
                     if id.is_none()
                         && matches!(
                             event,
-                            core::Event::Keyboard(_)
-                                | core::Event::Touch(_)
-                                | core::Event::Mouse(_)
+                            // TODO: fix this to something appropriate
+                            // core::Event::Keyboard(_)
+                            // |
+                            core::Event::Touch(_) | core::Event::Mouse(_)
                         )
                     {
                         continue;
@@ -1780,6 +1784,7 @@ async fn run_instance<'a, P, C>(
                     &mut clipboard,
                     #[cfg(feature = "a11y")]
                     &mut adapters,
+                    None,
                 );
             }
             _ => {

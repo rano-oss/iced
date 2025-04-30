@@ -72,6 +72,7 @@ impl SctkEventLoop {
         winit_event_sender: mpsc::UnboundedSender<Control>,
         proxy: winit::event_loop::EventLoopProxy,
         display: OwnedDisplayHandle,
+        id: Option<String>,
     ) -> Result<
         calloop::channel::Sender<super::Action>,
         Box<dyn std::any::Any + std::marker::Send>,
@@ -191,8 +192,9 @@ impl SctkEventLoop {
                     }
                 };
 
-            let input_method_manager = InputMethodManager::new(&globals, &qh)
-                .expect("Failed to initialize input method manager");
+            let input_method_manager =
+                InputMethodManager::new(&globals, &qh, id)
+                    .expect("Failed to initialize input method manager");
 
             let mut state = Self {
                 event_loop,
@@ -249,7 +251,6 @@ impl SctkEventLoop {
                     activation_token_ctr: 0,
                     token_senders: HashMap::new(),
                     overlap_notifications: HashMap::new(),
-                    //TODO: Feature flag
                     input_method_manager,
                 },
                 _features: Default::default(),

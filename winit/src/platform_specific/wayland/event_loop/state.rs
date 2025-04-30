@@ -24,10 +24,12 @@ use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
     fmt::Debug,
+    ops::Deref,
     sync::{atomic::AtomicU32, Arc, Mutex},
     time::Duration,
 };
 use wayland_backend::client::ObjectId;
+use wayland_client::protocol::wl_keyboard::KeyState;
 use winit::{
     dpi::{LogicalPosition, LogicalSize},
     platform::wayland::WindowExtWayland,
@@ -1375,6 +1377,17 @@ impl SctkState {
                 }
             },
             Action::InputMethod(action) => match action {
+                platform_specific::wayland::input_method::Action::ForwardKey{key_state} => {
+                    if let Some(seat) = self.seats.first() {
+                        let data: &InputMethod = seat.input_method.data().unwrap();
+                        let key_serial = if key_state == KeyState::Pressed {
+                            *data.pressed_key_serial.lock().unwrap()
+                        } else {
+                            *data.released_key_serial.lock().unwrap()
+                        };
+                        seat.input_method.key_forward(key_serial.0, key_serial.1);
+                    }
+                },
                 platform_specific::wayland::input_method::Action::Commit => {
                     if let Some(seat) = self.seats.first() {
                         let data: &InputMethod = seat.input_method.data().unwrap();
