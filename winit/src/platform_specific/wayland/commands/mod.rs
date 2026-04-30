@@ -9,3 +9,8 @@ pub mod overlap_notify;
 pub mod popup;
 pub mod session_lock;
 pub mod subsurface;
+
+#[cfg(feature = "wayland_input_method")]
+pub mod input_method;
+#[cfg(feature = "wayland_input_method")]
+pub mod input_method_popup;
