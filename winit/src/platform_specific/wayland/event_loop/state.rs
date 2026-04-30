@@ -148,6 +148,8 @@ pub(crate) struct SctkSeat {
     pub(crate) icon: Option<CursorIcon>,
     // Application asked for cursor to hide
     pub(crate) hidden: bool,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method: Option<wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2>,
 }
 
 impl SctkSeat {
@@ -499,6 +501,11 @@ pub struct SctkState {
     pub(crate) preedit: Option<Preedit>,
     pub(crate) pending_delete: Option<(usize, usize)>,
     pub(crate) pending_commit: Option<String>,
+
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_manager: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodManager>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_popup: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodPopup>,
 }
 
 /// An error that occurred while running an application.
@@ -1870,6 +1877,53 @@ impl SctkState {
                 }.clone();
                 self.apply_blur(id, rectangles, &s)
             },
+            #[cfg(feature = "wayland_input_method")]
+            Action::InputMethod(action) => {
+                use iced_runtime::platform_specific::wayland::input_method;
+                let seat = self.seats.first().expect("seat not present");
+                if let Some(im) = seat.input_method.as_ref() {
+                    match action {
+                        input_method::Action::SetPreeditString { string, cursor_begin, cursor_end } => {
+                            im.set_preedit_string(string, cursor_begin, cursor_end);
+                        }
+                        input_method::Action::CommitString(string) => {
+                            im.commit_string(string);
+                        }
+                        input_method::Action::Commit => {
+                            let serial = {
+                                // TODO: track serial properly
+                                0u32
+                            };
+                            im.commit(serial);
+                        }
+                        input_method::Action::FilterKey(_serial, _consumed) => {
+                            // Key filtering is handled at the keyboard grab level
+                        }
+                    }
+                }
+            }
+            #[cfg(feature = "wayland_input_method")]
+            Action::InputMethodPopup(action) => {
+                use iced_runtime::platform_specific::wayland::input_method_popup;
+                match action {
+                    input_method_popup::Action::Popup { settings } => {
+                        let _ = self.get_input_method_popup(settings);
+                    }
+                    input_method_popup::Action::ShowPopup => {
+                        self.show_input_method_popup();
+                    }
+                    input_method_popup::Action::HidePopup => {
+                        self.hide_input_method_popup();
+                    }
+                    input_method_popup::Action::Size { id: _, width: _, height: _ } => {
+                        // TODO: resize popup
+                    }
+                }
+            }
+            #[cfg(not(feature = "wayland_input_method"))]
+            Action::InputMethod(_) => {}
+            #[cfg(not(feature = "wayland_input_method"))]
+            Action::InputMethodPopup(_) => {}
         };
         Ok(())
     }

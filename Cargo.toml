@@ -125,7 +125,9 @@ wayland = [
     "iced_widget/wayland",
     "iced_core/wayland",
 ]
-
+# Alias kept for libcosmic feature wiring (cctk is folded into wayland upstream).
+cctk = ["wayland", "iced_winit/cctk"]
+wayland_input_method = ["iced_winit/wayland_input_method", "wayland"]
 [dependencies]
 iced_devtools.workspace = true
 iced_devtools.optional = true
@@ -296,6 +298,7 @@ wgpu = { version = "28.0", default-features = false, features = [
     "wgsl",
 ] }
 wayland-protocols = { version = "0.32.1", features = ["staging"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
 wayland-client = { version = "0.31.5" }
 # web-time = "1.1"
 

@@ -204,6 +204,43 @@ pub enum SctkEvent {
     },
     Subcompositor(SubsurfaceState),
     ShortcutsInhibited(bool),
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodEvent {
+        variant: InputMethodEventVariant,
+    },
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodKeyboardEvent {
+        variant: InputMethodKeyboardEventVariant,
+    },
+}
+
+/// Input method event variants
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodEventVariant {
+    Activate,
+    Deactivate,
+    SurroundingText {
+        text: String,
+        cursor: u32,
+        anchor: u32,
+    },
+    TextChangeCause(u32),
+    ContentType {
+        hint: u32,
+        purpose: u32,
+    },
+    Done,
+}
+
+/// Input method keyboard event variants
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodKeyboardEventVariant {
+    Press(KeyEvent, u32),
+    Release(KeyEvent, u32),
+    Repeat(KeyEvent),
+    Modifiers(Modifiers),
 }
 
 #[cfg(feature = "a11y")]
@@ -1759,6 +1796,116 @@ impl SctkEvent {
                     PlatformSpecific::Wayland(wayland::Event::BlurEnabled),
                 ),
             )),
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodEvent { variant } => {
+                use iced_runtime::core::event::wayland::input_method::InputMethodEvent;
+                let im_event = match variant {
+                    InputMethodEventVariant::Activate => {
+                        InputMethodEvent::Activate
+                    }
+                    InputMethodEventVariant::Deactivate => {
+                        InputMethodEvent::Deactivate
+                    }
+                    InputMethodEventVariant::SurroundingText {
+                        text,
+                        cursor,
+                        anchor,
+                    } => InputMethodEvent::SurroundingText {
+                        text,
+                        cursor,
+                        anchor,
+                    },
+                    InputMethodEventVariant::TextChangeCause(cause) => {
+                        InputMethodEvent::TextChangeCause(cause)
+                    }
+                    InputMethodEventVariant::ContentType { hint, purpose } => {
+                        InputMethodEvent::ContentType { hint, purpose }
+                    }
+                    InputMethodEventVariant::Done => InputMethodEvent::Done,
+                };
+                events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            im_event,
+                        )),
+                    ),
+                ));
+            }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodKeyboardEvent { variant } => {
+                use iced_runtime::core::event::wayland::input_method::{
+                    InputMethodKeyboardEvent, KeyEvent as ImKeyEvent,
+                    Modifiers as ImModifiers,
+                };
+                let im_kbd_event = match variant {
+                    InputMethodKeyboardEventVariant::Press(key_event, serial) => {
+                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                        let mods = ImModifiers::default(); // TODO: track modifiers
+                        InputMethodKeyboardEvent::Press(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            mods,
+                            serial,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Release(key_event, serial) => {
+                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                        let mods = ImModifiers::default();
+                        InputMethodKeyboardEvent::Release(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            mods,
+                            serial,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Repeat(key_event) => {
+                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                        let mods = ImModifiers::default();
+                        InputMethodKeyboardEvent::Repeat(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            mods,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Modifiers(mods) => {
+                        InputMethodKeyboardEvent::Modifiers(
+                            ImModifiers {
+                                ctrl: mods.ctrl,
+                                alt: mods.alt,
+                                shift: mods.shift,
+                                caps_lock: mods.caps_lock,
+                                logo: mods.logo,
+                                num_lock: mods.num_lock,
+                            },
+                            iced_runtime::core::event::wayland::input_method::RawModifiers::default(),
+                        )
+                    }
+                };
+                events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(
+                            wayland::Event::InputMethodKeyboard(im_kbd_event),
+                        ),
+                    ),
+                ));
+            }
         }
     }
 }

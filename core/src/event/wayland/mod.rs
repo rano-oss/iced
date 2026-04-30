@@ -1,3 +1,5 @@
+/// Input method events
+pub mod input_method;
 mod layer;
 mod output;
 mod overlap_notify;
@@ -48,4 +50,8 @@ pub enum Event {
     ShortcutsInhibited(bool),
     /// Blur Support Enabled
     BlurEnabled,
+    /// Input method event
+    InputMethod(input_method::InputMethodEvent),
+    /// Input method keyboard event
+    InputMethodKeyboard(input_method::InputMethodKeyboardEvent),
 }

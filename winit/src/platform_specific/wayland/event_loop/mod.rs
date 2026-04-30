@@ -351,6 +351,9 @@ impl SctkEventLoop {
                         }
                     };
 
+                #[cfg(feature = "wayland_input_method")]
+                let input_method_manager = crate::platform_specific::wayland::handlers::input_method::InputMethodManager::new(&globals, &qh).ok();
+
                 let mut state = Self {
                     event_loop,
                     state: SctkState {
@@ -435,6 +438,10 @@ impl SctkEventLoop {
                         pending_delete: None,
                         pending_commit: None,
                         pending_blur: HashMap::new(),
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_manager,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup: None,
                     },
                     _features: Default::default(),
                 };

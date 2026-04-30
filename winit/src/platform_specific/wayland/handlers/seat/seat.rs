@@ -39,6 +39,8 @@ impl SeatHandler for SctkState {
             icon: None,
             active_icon: None,
             hidden: false,
+            #[cfg(feature = "wayland_input_method")]
+            input_method: None,
         });
     }
 
@@ -67,6 +69,8 @@ impl SeatHandler for SctkState {
                     icon: None,
                     active_icon: None,
                     hidden: false,
+                    #[cfg(feature = "wayland_input_method")]
+                    input_method: None,
                 });
                 self.seats.last_mut().unwrap()
             }
@@ -107,6 +111,21 @@ impl SeatHandler for SctkState {
                         id: seat.clone(),
                     });
                     _ = my_seat.kbd.replace(kbd);
+                }
+                #[cfg(feature = "wayland_input_method")]
+                {
+                    if my_seat.input_method.is_none() {
+                        if let Some(im_manager) =
+                            self.input_method_manager.as_ref()
+                        {
+                            let im = im_manager.input_method(
+                                &seat,
+                                &self.queue_handle,
+                                self.loop_handle.clone(),
+                            );
+                            my_seat.input_method = Some(im);
+                        }
+                    }
                 }
             }
             cctk::sctk::seat::Capability::Pointer => {
