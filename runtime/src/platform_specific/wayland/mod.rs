@@ -10,9 +10,6 @@ pub mod activation;
 /// input method actions
 pub mod input_method;
 
-/// input method popup actions
-pub mod input_method_popup;
-
 /// layer surface actions
 pub mod layer_surface;
 /// popup actions
@@ -45,8 +42,6 @@ pub enum Action {
     BlurSurface(Id, Option<Vec<Rectangle>>),
     /// Input method action
     InputMethod(input_method::Action),
-    /// Input method popup action
-    InputMethodPopup(input_method_popup::Action),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -89,9 +84,6 @@ impl Debug for Action {
                 .finish(),
             Action::InputMethod(action) => {
                 f.debug_tuple("InputMethod").field(action).finish()
-            }
-            Action::InputMethodPopup(action) => {
-                f.debug_tuple("InputMethodPopup").field(action).finish()
             }
         }
     }

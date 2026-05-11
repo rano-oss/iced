@@ -353,6 +353,8 @@ impl SctkEventLoop {
 
                 #[cfg(feature = "wayland_input_method")]
                 let input_method_manager = crate::platform_specific::wayland::handlers::input_method::InputMethodManager::new(&globals, &qh).ok();
+                #[cfg(feature = "wayland_input_method")]
+                let keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1> = globals.bind(&qh, 1..=1, cctk::sctk::globals::GlobalData).ok();
 
                 let mut state = Self {
                     event_loop,
@@ -442,6 +444,12 @@ impl SctkEventLoop {
                         input_method_manager,
                         #[cfg(feature = "wayland_input_method")]
                         input_method_popup: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup_settings: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter_manager,
                     },
                     _features: Default::default(),
                 };
@@ -528,50 +536,51 @@ impl SctkEventLoop {
                     let had_events = !state.state.sctk_events.is_empty();
                     let mut wake_up = had_events;
 
-                    for e in state.state.sctk_events.drain(..) {
-                        if let SctkEvent::Winit(id, e) = e {
-                            _ = state
+                    #[cfg(feature = "wayland_input_method")]
+                    {
+                        let need_popup_redraw =
+                            state.state.sctk_events.iter().any(|e| {
+                                matches!(
+                                    e,
+                                    SctkEvent::InputMethodKeyboardEvent { .. }
+                                )
+                            }) && state.state.input_method_popup.is_some();
+                        if need_popup_redraw {
+                            let s = state
                                 .state
-                                .events_sender
-                                .unbounded_send(Control::Winit(id, e));
-                        } else {
-                            _ =
-                                state
-                                    .state
-                                    .events_sender
-                                    .unbounded_send(Control::PlatformSpecific(
-                                    crate::platform_specific::Event::Wayland(e),
-                                ));
+                                .input_method_popup
+                                .as_ref()
+                                .unwrap()
+                                .wl_surface
+                                .clone();
+                            state.state.request_redraw(&s);
                         }
                     }
 
-                    for s in
-                        state
-                            .state
-                            .layer_surfaces
-                            .iter()
-                            .map(|s| s.surface.wl_surface())
-                            .chain(
-                                state
-                                    .state
-                                    .popmgr
-                                    .popups()
-                                    .map(|s| s.popup.wl_surface()),
-                            )
-                            .chain(
-                                state.state.lock_surfaces.iter().map(|s| {
-                                    s.session_lock_surface.wl_surface()
-                                }),
-                            )
-                    {
+                    let mut surfaces_to_redraw: Vec<&cctk::sctk::reexports::client::protocol::wl_surface::WlSurface> = Vec::new();
+                    for s in state.state.layer_surfaces.iter() {
+                        surfaces_to_redraw.push(s.surface.wl_surface());
+                    }
+                    for s in state.state.popups.iter() {
+                        surfaces_to_redraw.push(s.popup.wl_surface());
+                    }
+                    for s in state.state.lock_surfaces.iter() {
+                        surfaces_to_redraw
+                            .push(s.session_lock_surface.wl_surface());
+                    }
+                    #[cfg(feature = "wayland_input_method")]
+                    if let Some(ref popup) = state.state.input_method_popup {
+                        surfaces_to_redraw.push(&popup.wl_surface);
+                    }
+
+                    for s in surfaces_to_redraw.into_iter() {
                         let id = s.id();
-                        if state
-                            .state
-                            .frame_status
-                            .get(&id)
+                        let frame_status = state.state.frame_status.get(&id);
+                        let in_id_map = state.state.id_map.contains_key(&id);
+                        if frame_status
                             .map(|v| !matches!(v, state::FrameStatus::Ready))
                             .unwrap_or(true)
-                            || !state.state.id_map.contains_key(&id)
+                            || !in_id_map
                         {
                             continue;
                         }
@@ -589,6 +598,22 @@ impl SctkEventLoop {
                         );
                     }
 
+                    for e in state.state.sctk_events.drain(..) {
+                        if let SctkEvent::Winit(id, e) = e {
+                            _ = state
+                                .state
+                                .events_sender
+                                .unbounded_send(Control::Winit(id, e));
+                        } else {
+                            _ =
+                                state
+                                    .state
+                                    .events_sender
+                                    .unbounded_send(Control::PlatformSpecific(
+                                    crate::platform_specific::Event::Wayland(e),
+                                ));
+                        }
+                    }
                     if wake_up {
                         state.state.proxy.wake_up();
                     }

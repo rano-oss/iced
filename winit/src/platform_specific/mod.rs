@@ -42,6 +42,8 @@ pub enum SurfaceIdWrapper {
     Popup(window::Id),
     SessionLock(window::Id),
     Subsurface(window::Id),
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopup(window::Id),
 }
 impl SurfaceIdWrapper {
     pub fn inner(&self) -> window::Id {
@@ -51,6 +53,8 @@ impl SurfaceIdWrapper {
             SurfaceIdWrapper::Popup(id) => *id,
             SurfaceIdWrapper::SessionLock(id) => *id,
             SurfaceIdWrapper::Subsurface(id) => *id,
+            #[cfg(feature = "wayland_input_method")]
+            SurfaceIdWrapper::InputMethodPopup(id) => *id,
         }
     }
 }

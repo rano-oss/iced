@@ -161,6 +161,16 @@ pub enum SctkEvent {
     },
 
     SubsurfaceEvent(SubsurfaceEventVariant),
+
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopupEvent {
+        variant: InputMethodPopupEventVariant,
+        id: WlSurface,
+    },
+
+    //
+    // output events
+    //
     NewOutput {
         id: WlOutput,
         info: Option<OutputInfo>,
@@ -231,6 +241,7 @@ pub enum InputMethodEventVariant {
         purpose: u32,
     },
     Done,
+    Unavailable,
 }
 
 /// Input method keyboard event variants
@@ -239,7 +250,7 @@ pub enum InputMethodEventVariant {
 pub enum InputMethodKeyboardEventVariant {
     Press(KeyEvent, u32),
     Release(KeyEvent, u32),
-    Repeat(KeyEvent),
+    Repeat(KeyEvent, u32),
     Modifiers(Modifiers),
 }
 
@@ -348,6 +359,23 @@ pub enum LayerSurfaceEventVariant {
     Configure(LayerSurfaceConfigure, WlSurface, bool),
     /// Scale Factor
     ScaleFactorChanged(f64, Option<WpViewport>),
+}
+
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodPopupEventVariant {
+    /// Sent after creation of the input method popup surface
+    Created(
+        QueueHandle<SctkState>,
+        CommonSurface,
+        SurfaceId,
+        Arc<Mutex<Common>>,
+        WlDisplay,
+    ),
+    /// Configure event with position/size from compositor
+    Configure { width: i32, height: i32 },
+    /// Done / closed
+    Done,
 }
 
 /// Pending update to a window requested by the user.
@@ -574,6 +602,8 @@ impl SctkEvent {
                                 ),
                             ),
                             SurfaceIdWrapper::Subsurface(id) => None,
+                            #[cfg(feature = "wayland_input_method")]
+                            SurfaceIdWrapper::InputMethodPopup(_) => None,
                         })
                     {
                         events.push((
@@ -636,6 +666,8 @@ impl SctkEvent {
                                     ),
                                 ),
                                 SurfaceIdWrapper::Subsurface(_) => None,
+                                #[cfg(feature = "wayland_input_method")]
+                                SurfaceIdWrapper::InputMethodPopup(_) => None,
                             }
                             .map(|e| (Some(id.inner()), e))
                         })
@@ -1816,12 +1848,15 @@ impl SctkEvent {
                         anchor,
                     },
                     InputMethodEventVariant::TextChangeCause(cause) => {
-                        InputMethodEvent::TextChangeCause(cause)
+                        InputMethodEvent::TextChangeCause { cause }
                     }
                     InputMethodEventVariant::ContentType { hint, purpose } => {
                         InputMethodEvent::ContentType { hint, purpose }
                     }
                     InputMethodEventVariant::Done => InputMethodEvent::Done,
+                    InputMethodEventVariant::Unavailable => {
+                        InputMethodEvent::Unavailable
+                    }
                 };
                 events.push((
                     None,
@@ -1839,8 +1874,12 @@ impl SctkEvent {
                     Modifiers as ImModifiers,
                 };
                 let im_kbd_event = match variant {
-                    InputMethodKeyboardEventVariant::Press(key_event, serial) => {
-                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                    InputMethodKeyboardEventVariant::Press(
+                        key_event,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
                         let mods = ImModifiers::default(); // TODO: track modifiers
                         InputMethodKeyboardEvent::Press(
                             ImKeyEvent {
@@ -1854,8 +1893,12 @@ impl SctkEvent {
                             serial,
                         )
                     }
-                    InputMethodKeyboardEventVariant::Release(key_event, serial) => {
-                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                    InputMethodKeyboardEventVariant::Release(
+                        key_event,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
                         let mods = ImModifiers::default();
                         InputMethodKeyboardEvent::Release(
                             ImKeyEvent {
@@ -1869,8 +1912,12 @@ impl SctkEvent {
                             serial,
                         )
                     }
-                    InputMethodKeyboardEventVariant::Repeat(key_event) => {
-                        let (key, _location) = keysym_to_vkey_location(key_event.keysym);
+                    InputMethodKeyboardEventVariant::Repeat(
+                        key_event,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
                         let mods = ImModifiers::default();
                         InputMethodKeyboardEvent::Repeat(
                             ImKeyEvent {
@@ -1881,20 +1928,18 @@ impl SctkEvent {
                             },
                             key,
                             mods,
+                            serial,
                         )
                     }
                     InputMethodKeyboardEventVariant::Modifiers(mods) => {
-                        InputMethodKeyboardEvent::Modifiers(
-                            ImModifiers {
-                                ctrl: mods.ctrl,
-                                alt: mods.alt,
-                                shift: mods.shift,
-                                caps_lock: mods.caps_lock,
-                                logo: mods.logo,
-                                num_lock: mods.num_lock,
-                            },
-                            iced_runtime::core::event::wayland::input_method::RawModifiers::default(),
-                        )
+                        InputMethodKeyboardEvent::Modifiers(ImModifiers {
+                            ctrl: mods.ctrl,
+                            alt: mods.alt,
+                            shift: mods.shift,
+                            caps_lock: mods.caps_lock,
+                            logo: mods.logo,
+                            num_lock: mods.num_lock,
+                        })
                     }
                 };
                 events.push((
@@ -1906,6 +1951,108 @@ impl SctkEvent {
                     ),
                 ));
             }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodPopupEvent {
+                variant,
+                id: surface,
+            } => match variant {
+                InputMethodPopupEventVariant::Created(
+                    queue_handle,
+                    surface,
+                    surface_id,
+                    common,
+                    display,
+                ) => {
+                    let wl_surface = surface.wl_surface();
+                    let object_id = wl_surface.id();
+                    let wrapper =
+                        SurfaceIdWrapper::InputMethodPopup(surface_id.clone());
+                    _ = surface_ids.insert(object_id.clone(), wrapper.clone());
+                    let sctk_winit = SctkWinitWindow::new(
+                        sctk_tx.clone(),
+                        common,
+                        wrapper,
+                        surface,
+                        display,
+                        queue_handle,
+                    );
+                    if compositor.is_none() {
+                        match create_compositor(
+                            sctk_winit.clone(),
+                            create_compositor_data,
+                        )
+                        .await
+                        {
+                            Ok(c) => *compositor = Some(c),
+                            Err(error) => {
+                                control_sender
+                                    .start_send(Control::Crash(
+                                        Error::GraphicsCreationFailed(error),
+                                    ))
+                                    .expect("Send control message");
+                                return;
+                            }
+                        };
+                    }
+                    let compositor = compositor.as_mut().unwrap();
+                    let window = window_manager.insert(
+                        surface_id,
+                        sctk_winit,
+                        program,
+                        compositor,
+                        false,
+                        theme::Mode::None,
+                        0,
+                    );
+                    // IM popup doesn't need a11y adapter — mark ready immediately
+                    window.state.set_a11y_ready(true);
+                    _ = surface_ids.insert(object_id, wrapper.clone());
+                    let logical_size = window.logical_size();
+
+                    let ui = crate::build_user_interface(
+                        program,
+                        user_interface::Cache::default(),
+                        &mut window.renderer,
+                        logical_size,
+                        surface_id,
+                        window.raw.clone(),
+                        window.prev_dnd_destination_rectangles_count,
+                        clipboard,
+                    );
+
+                    let _ = user_interfaces.insert(surface_id, ui);
+                    window.raw.request_redraw();
+                }
+                InputMethodPopupEventVariant::Configure { width, height } => {
+                    if let Some(id) = surface_ids.get(&surface.id()) {
+                        if let Some(window) = window_manager.get_mut(id.inner())
+                        {
+                            if width > 0 && height > 0 {
+                                let s = winit::dpi::Size::Physical(
+                                    PhysicalSize::new(
+                                        width as u32,
+                                        height as u32,
+                                    ),
+                                );
+                                _ = window.raw.request_surface_size(s);
+                            }
+                            window.raw.request_redraw();
+                        }
+                    }
+                }
+                InputMethodPopupEventVariant::Done => {
+                    if let Some(id) = surface_ids.remove(&surface.id()) {
+                        if let Some(w) = window_manager.remove(id.inner()) {
+                            if clipboard
+                                .window_id()
+                                .is_some_and(|cid| w.raw.id() == cid)
+                            {
+                                *clipboard = Clipboard::unconnected();
+                            }
+                        }
+                    }
+                }
+            },
         }
     }
 }

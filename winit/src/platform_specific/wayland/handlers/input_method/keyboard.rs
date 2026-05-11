@@ -13,19 +13,19 @@ use cctk::sctk::reexports::calloop::{
 };
 use cctk::sctk::{
     reexports::client::{
-        Connection, Dispatch, Proxy, QueueHandle, WEnum, protocol::wl_keyboard,
+        Connection, Dispatch, Proxy, QueueHandle, WEnum,
+        protocol::wl_keyboard::{self, WlKeyboard},
     },
-    seat::keyboard::{KeyEvent, KeyboardError, Modifiers, RMLVO, RepeatInfo},
+    seat::keyboard::{KeyEvent, Modifiers, RepeatInfo},
 };
 
 use xkbcommon::xkb;
 
-use wayland_protocols_misc::zwp_input_method_v2::client::{
-    zwp_input_method_keyboard_grab_v2::{self, ZwpInputMethodKeyboardGrabV2},
-    zwp_input_method_v2::ZwpInputMethodV2,
+use wayland_protocols_experimental::keyboard_filter::v3::client::{
+    xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1,
+    xx_keyboard_filter_v1::{self, XxKeyboardFilterV1},
 };
 
-use super::InputMethod;
 use crate::platform_specific::wayland::event_loop::state::SctkState;
 use crate::platform_specific::wayland::sctk_event::{
     InputMethodKeyboardEventVariant, SctkEvent,
@@ -36,10 +36,8 @@ pub(crate) struct RepeatedKey {
     pub(crate) is_first: bool,
 }
 
-pub type RepeatCallback = Box<
-    dyn FnMut(&mut SctkState, &ZwpInputMethodKeyboardGrabV2, KeyEvent)
-        + 'static,
->;
+pub type RepeatCallback =
+    Box<dyn FnMut(&mut SctkState, &WlKeyboard, KeyEvent) + 'static>;
 
 pub(crate) struct RepeatData {
     pub(crate) current_repeat: Option<RepeatedKey>,
@@ -57,42 +55,9 @@ impl Drop for RepeatData {
     }
 }
 
-impl InputMethod {
-    pub fn grab_keyboard_with_repeat(
-        &mut self,
-        qh: &QueueHandle<SctkState>,
-        input_method: &ZwpInputMethodV2,
-        rmlvo: Option<RMLVO>,
-        loop_handle: LoopHandle<'static, SctkState>,
-        callback: RepeatCallback,
-    ) -> Result<ZwpInputMethodKeyboardGrabV2, KeyboardError> {
-        let udata = match rmlvo {
-            Some(rmlvo) => InputMethodKeyboardData::from_rmlvo(rmlvo)?,
-            None => InputMethodKeyboardData::new(),
-        };
-
-        let kbd_data = &udata;
-        let _ = kbd_data.repeat_data.lock().unwrap().replace(RepeatData {
-            current_repeat: None,
-            repeat_info: RepeatInfo::Disable,
-            loop_handle: loop_handle.clone(),
-            callback,
-            repeat_token: None,
-        });
-        kbd_data.init_compose();
-
-        Ok(input_method.grab_keyboard(qh, udata))
-    }
-}
-
-/// Wrapper around a libxkbcommon keymap
-#[allow(missing_debug_implementations)]
-pub struct Keymap<'a>(pub(crate) &'a xkb::Keymap);
-
-impl<'a> Keymap<'a> {
-    pub fn as_string(&self) -> String {
-        self.0.get_as_string(xkb::KEYMAP_FORMAT_TEXT_V1)
-    }
+fn send_event(state: &SctkState, event: SctkEvent) {
+    use crate::platform_specific::wayland::event_loop::state::send_event as do_send;
+    do_send(&state.events_sender, &state.proxy, event);
 }
 
 pub struct InputMethodKeyboardData {
@@ -116,52 +81,13 @@ unsafe impl Send for InputMethodKeyboardData {}
 unsafe impl Sync for InputMethodKeyboardData {}
 
 impl InputMethodKeyboardData {
-    pub fn new() -> Self {
+    pub fn new(
+        loop_handle: LoopHandle<'static, SctkState>,
+        callback: RepeatCallback,
+    ) -> Self {
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
-        let udata = InputMethodKeyboardData {
-            xkb_context: Mutex::new(xkb_context),
-            xkb_state: Mutex::new(None),
-            user_specified_rmlvo: false,
-            xkb_compose: Mutex::new(None),
-            repeat_data: Arc::new(Mutex::new(None)),
-        };
-        udata.init_compose();
-        udata
-    }
 
-    pub fn from_rmlvo(rmlvo: RMLVO) -> Result<Self, KeyboardError> {
-        let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
-        let keymap = xkb::Keymap::new_from_names(
-            &xkb_context,
-            &rmlvo.rules.unwrap_or_default(),
-            &rmlvo.model.unwrap_or_default(),
-            &rmlvo.layout.unwrap_or_default(),
-            &rmlvo.variant.unwrap_or_default(),
-            rmlvo.options,
-            xkb::COMPILE_NO_FLAGS,
-        );
-
-        if keymap.is_none() {
-            return Err(KeyboardError::InvalidKeymap);
-        }
-
-        let xkb_state = Some(xkb::State::new(&keymap.unwrap()));
-
-        let udata = InputMethodKeyboardData {
-            xkb_context: Mutex::new(xkb_context),
-            xkb_state: Mutex::new(xkb_state),
-            user_specified_rmlvo: true,
-            xkb_compose: Mutex::new(None),
-            repeat_data: Arc::new(Mutex::new(None)),
-        };
-        udata.init_compose();
-        Ok(udata)
-    }
-
-    fn init_compose(&self) {
-        let xkb_context = self.xkb_context.lock().unwrap();
-
-        if let Some(locale) = env::var_os("LC_ALL")
+        let xkb_compose = if let Some(locale) = env::var_os("LC_ALL")
             .and_then(|v| if v.is_empty() { None } else { Some(v) })
             .or_else(|| env::var_os("LC_CTYPE"))
             .and_then(|v| if v.is_empty() { None } else { Some(v) })
@@ -179,15 +105,32 @@ impl InputMethodKeyboardData {
                     &table,
                     xkb::compose::COMPILE_NO_FLAGS,
                 );
-                *self.xkb_compose.lock().unwrap() = Some(compose_state);
+                Some(compose_state)
+            } else {
+                None
             }
+        } else {
+            None
+        };
+
+        InputMethodKeyboardData {
+            xkb_context: Mutex::new(xkb_context),
+            user_specified_rmlvo: false,
+            xkb_state: Mutex::new(None),
+            xkb_compose: Mutex::new(xkb_compose),
+            repeat_data: Arc::new(Mutex::new(Some(RepeatData {
+                current_repeat: None,
+                repeat_info: RepeatInfo::Disable,
+                loop_handle: loop_handle.clone(),
+                callback,
+                repeat_token: None,
+            }))),
         }
     }
 
-    fn update_modifiers(&self) -> Modifiers {
+    pub fn update_modifiers(&self) -> Modifiers {
         let guard = self.xkb_state.lock().unwrap();
         let state = guard.as_ref().unwrap();
-
         Modifiers {
             ctrl: state.mod_name_is_active(
                 xkb::MOD_NAME_CTRL,
@@ -217,37 +160,20 @@ impl InputMethodKeyboardData {
     }
 }
 
-/// Raw modifiers from the compositor
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RawModifiers {
-    pub mods_depressed: u32,
-    pub mods_latched: u32,
-    pub mods_locked: u32,
-    pub group: u32,
-}
-
-fn send_event(state: &SctkState, event: SctkEvent) {
-    use crate::platform_specific::wayland::event_loop::state::send_event as do_send;
-    do_send(&state.events_sender, &state.proxy, event);
-}
-
-impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
-    for SctkState
-{
+// Dispatch for WlKeyboard with InputMethodKeyboardData
+// This handles keyboard events for the IM-bound keyboard
+impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
     fn event(
         state: &mut SctkState,
-        keyboard: &ZwpInputMethodKeyboardGrabV2,
-        event: <ZwpInputMethodKeyboardGrabV2 as Proxy>::Event,
+        keyboard: &WlKeyboard,
+        event: <WlKeyboard as Proxy>::Event,
         udata: &InputMethodKeyboardData,
-        conn: &Connection,
-        qh: &QueueHandle<SctkState>,
+        _conn: &Connection,
+        _qh: &QueueHandle<SctkState>,
     ) {
+        log::debug!(target: "im_kbd", "IM keyboard event: {:?}", std::mem::discriminant(&event));
         match event {
-            zwp_input_method_keyboard_grab_v2::Event::Keymap {
-                format,
-                fd,
-                size,
-            } => match format {
+            wl_keyboard::Event::Keymap { format, fd, size } => match format {
                 WEnum::Value(format) => match format {
                     wl_keyboard::KeymapFormat::NoKeymap => {
                         log::warn!(target: "sctk", "non-xkb compatible keymap");
@@ -282,14 +208,16 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                             }
                         }
                     }
-                    _ => unreachable!(),
+                    _ => {
+                        log::warn!(target: "sctk", "unknown keymap format variant");
+                    }
                 },
                 WEnum::Unknown(value) => {
                     log::warn!(target: "sctk", "unknown keymap format 0x{:x}", value)
                 }
             },
 
-            zwp_input_method_keyboard_grab_v2::Event::Key {
+            wl_keyboard::Event::Key {
                 serial,
                 time,
                 key,
@@ -348,6 +276,13 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                                             .map(|r| r.key.raw_code)
                                     {
                                         repeat_data.current_repeat = None;
+                                        if let Some(token) =
+                                            repeat_data.repeat_token.take()
+                                        {
+                                            repeat_data
+                                                .loop_handle
+                                                .remove(token);
+                                        }
                                     }
                                 }
                                 state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
@@ -355,6 +290,17 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                                 });
                             }
                             wl_keyboard::KeyState::Pressed => {
+                                // Push the press event first, before repeat setup
+                                state
+                                    .sctk_events
+                                    .push(SctkEvent::InputMethodKeyboardEvent {
+                                    variant:
+                                        InputMethodKeyboardEventVariant::Press(
+                                            event.clone(),
+                                            serial,
+                                        ),
+                                });
+
                                 if let Some(repeat_data) =
                                     udata.repeat_data.lock().unwrap().as_mut()
                                 {
@@ -377,12 +323,12 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                                             loop_handle.remove(token);
                                         }
 
-                                        let _ = repeat_data.current_repeat.replace(
-                                            RepeatedKey {
+                                        let _ = repeat_data
+                                            .current_repeat
+                                            .replace(RepeatedKey {
                                                 key: event.clone(),
                                                 is_first: true,
-                                            },
-                                        );
+                                            });
 
                                         let (delay, rate) =
                                             match repeat_data.repeat_info {
@@ -432,16 +378,18 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                                         }
                                     }
                                 }
+                            }
+                            _ => {
+                                // Handle server-side key repeat
                                 state
                                     .sctk_events
                                     .push(SctkEvent::InputMethodKeyboardEvent {
                                     variant:
-                                        InputMethodKeyboardEventVariant::Press(
+                                        InputMethodKeyboardEventVariant::Repeat(
                                             event, serial,
                                         ),
                                 });
                             }
-                            _ => unreachable!(),
                         }
                     };
                 }
@@ -450,7 +398,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                 }
             },
 
-            zwp_input_method_keyboard_grab_v2::Event::Modifiers {
+            wl_keyboard::Event::Modifiers {
                 serial: _,
                 mods_depressed,
                 mods_latched,
@@ -516,10 +464,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                 });
             }
 
-            zwp_input_method_keyboard_grab_v2::Event::RepeatInfo {
-                rate,
-                delay,
-            } => {
+            wl_keyboard::Event::RepeatInfo { rate, delay } => {
                 let info = if rate != 0 {
                     RepeatInfo::Repeat {
                         rate: NonZeroU32::new(rate as u32).unwrap(),
@@ -536,7 +481,44 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, InputMethodKeyboardData>
                 }
             }
 
-            _ => unreachable!(),
+            wl_keyboard::Event::Enter { .. }
+            | wl_keyboard::Event::Leave { .. } => {
+                // Ignored for IM keyboard — interceptor handles enter/leave semantics
+            }
+
+            _ => {
+                log::warn!(target: "sctk", "unhandled input method keyboard event");
+            }
         }
+    }
+}
+
+// Dispatch for XxKeyboardFilterManagerV1
+impl Dispatch<XxKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
+    for SctkState
+{
+    fn event(
+        _state: &mut SctkState,
+        _: &XxKeyboardFilterManagerV1,
+        _: <XxKeyboardFilterManagerV1 as Proxy>::Event,
+        _: &cctk::sctk::globals::GlobalData,
+        _: &Connection,
+        _: &QueueHandle<SctkState>,
+    ) {
+        // No events for the manager
+    }
+}
+
+// Dispatch for XxKeyboardFilterV1
+impl Dispatch<XxKeyboardFilterV1, ()> for SctkState {
+    fn event(
+        _state: &mut SctkState,
+        _: &XxKeyboardFilterV1,
+        _: <XxKeyboardFilterV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<SctkState>,
+    ) {
+        // No events for keyboard_filter (it's all requests)
     }
 }

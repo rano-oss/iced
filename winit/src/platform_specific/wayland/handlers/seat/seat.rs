@@ -123,6 +123,42 @@ impl SeatHandler for SctkState {
                                 &self.queue_handle,
                                 self.loop_handle.clone(),
                             );
+
+                            // Create IM-bound keyboard and keyboard filter
+                            if let Some(kf_manager) =
+                                self.keyboard_filter_manager.as_ref()
+                            {
+                                use crate::platform_specific::wayland::handlers::input_method::keyboard::InputMethodKeyboardData;
+
+                                // Create a wl_keyboard with our custom data for IM key events
+                                let im_kbd = seat.get_keyboard(
+                                    &self.queue_handle,
+                                    InputMethodKeyboardData::new(
+                                        self.loop_handle.clone(),
+                                        Box::new(move |state, _kbd, event| {
+                                            state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
+                                                variant: crate::platform_specific::wayland::sctk_event::InputMethodKeyboardEventVariant::Repeat(event, 0),
+                                            });
+                                        }),
+                                    ),
+                                );
+
+                                // Create a dummy surface for enter/leave
+                                let dummy_surface = self
+                                    .compositor_state
+                                    .create_surface(&self.queue_handle);
+
+                                // Bind keyboard to input method
+                                let kf = kf_manager.bind_to_input_method(
+                                    &im_kbd,
+                                    &im,
+                                    &dummy_surface,
+                                    &self.queue_handle,
+                                    (),
+                                );
+                                self.keyboard_filter = Some(kf);
+                            }
+
                             my_seat.input_method = Some(im);
                         }
                     }

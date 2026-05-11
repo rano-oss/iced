@@ -12,5 +12,3 @@ pub mod subsurface;
 
 #[cfg(feature = "wayland_input_method")]
 pub mod input_method;
-#[cfg(feature = "wayland_input_method")]
-pub mod input_method_popup;

@@ -149,7 +149,7 @@ pub(crate) struct SctkSeat {
     // Application asked for cursor to hide
     pub(crate) hidden: bool,
     #[cfg(feature = "wayland_input_method")]
-    pub(crate) input_method: Option<wayland_protocols_misc::zwp_input_method_v2::client::zwp_input_method_v2::ZwpInputMethodV2>,
+    pub(crate) input_method: Option<wayland_protocols_experimental::input_method::v1::client::xx_input_method_v1::XxInputMethodV1>,
 }
 
 impl SctkSeat {
@@ -253,6 +253,8 @@ pub enum CommonSurface {
         wl_surface: WlSurface,
         wl_subsurface: WlSubsurface,
     },
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopup(WlSurface),
 }
 
 impl CommonSurface {
@@ -264,6 +266,8 @@ impl CommonSurface {
                 session_lock_surface.wl_surface()
             }
             CommonSurface::Subsurface { wl_surface, .. } => wl_surface,
+            #[cfg(feature = "wayland_input_method")]
+            CommonSurface::InputMethodPopup(wl_surface) => wl_surface,
         };
         wl_surface
     }
@@ -506,6 +510,12 @@ pub struct SctkState {
     pub(crate) input_method_manager: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodManager>,
     #[cfg(feature = "wayland_input_method")]
     pub(crate) input_method_popup: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodPopup>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_popup_settings: Option<iced_runtime::platform_specific::wayland::input_method::InputMethodPopupSettings>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) keyboard_filter: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::XxKeyboardFilterV1>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1>,
 }
 
 /// An error that occurred while running an application.
@@ -1880,50 +1890,57 @@ impl SctkState {
             #[cfg(feature = "wayland_input_method")]
             Action::InputMethod(action) => {
                 use iced_runtime::platform_specific::wayland::input_method;
-                let seat = self.seats.first().expect("seat not present");
-                if let Some(im) = seat.input_method.as_ref() {
-                    match action {
-                        input_method::Action::SetPreeditString { string, cursor_begin, cursor_end } => {
-                            im.set_preedit_string(string, cursor_begin, cursor_end);
-                        }
-                        input_method::Action::CommitString(string) => {
-                            im.commit_string(string);
-                        }
-                        input_method::Action::Commit => {
-                            let serial = {
-                                // TODO: track serial properly
-                                0u32
-                            };
-                            im.commit(serial);
-                        }
-                        input_method::Action::FilterKey(_serial, _consumed) => {
-                            // Key filtering is handled at the keyboard grab level
-                        }
-                    }
-                }
-            }
-            #[cfg(feature = "wayland_input_method")]
-            Action::InputMethodPopup(action) => {
-                use iced_runtime::platform_specific::wayland::input_method_popup;
                 match action {
-                    input_method_popup::Action::Popup { settings } => {
-                        let _ = self.get_input_method_popup(settings);
+                    input_method::Action::Popup { settings } => {
+                        self.input_method_popup_settings = Some(settings);
                     }
-                    input_method_popup::Action::ShowPopup => {
-                        self.show_input_method_popup();
-                    }
-                    input_method_popup::Action::HidePopup => {
-                        self.hide_input_method_popup();
-                    }
-                    input_method_popup::Action::Size { id: _, width: _, height: _ } => {
+                    input_method::Action::Size { id: _, width: _, height: _ } => {
                         // TODO: resize popup
+                    }
+                    input_method::Action::SetFrozen { frozen } => {
+                        if let Some(popup) = self.input_method_popup.as_ref() {
+                            if let Some(role) = popup.popup_role.as_ref() {
+                                role.set_frozen(if frozen { 1 } else { 0 });
+                            }
+                        }
+                    }
+                    action => {
+                        let seat = self.seats.first();
+                        let im = seat.and_then(|s| s.input_method.as_ref());
+                        if let Some(im) = im {
+                            match action {
+                                input_method::Action::SetPreeditString { string, cursor_begin, cursor_end } => {
+                                    im.set_preedit_string(string, cursor_begin, cursor_end);
+                                }
+                                input_method::Action::CommitString(string) => {
+                                    im.commit_string(string);
+                                }
+                                input_method::Action::Commit => {
+                                    use crate::platform_specific::wayland::handlers::input_method::InputMethod;
+                                    let serial = im.data::<InputMethod>()
+                                        .map(|d| d.inner.lock().unwrap().serial)
+                                        .unwrap_or(0);
+                                    im.commit(serial);
+                                }
+                                input_method::Action::FilterKey(serial, consumed) => {
+                                    if let Some(kf) = self.keyboard_filter.as_ref() {
+                                        use wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::FilterAction;
+                                        let action = if consumed {
+                                            FilterAction::Consume
+                                        } else {
+                                            FilterAction::Passthrough
+                                        };
+                                        kf.filter(serial, action);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
             }
             #[cfg(not(feature = "wayland_input_method"))]
             Action::InputMethod(_) => {}
-            #[cfg(not(feature = "wayland_input_method"))]
-            Action::InputMethodPopup(_) => {}
         };
         Ok(())
     }

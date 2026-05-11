@@ -298,6 +298,7 @@ wgpu = { version = "28.0", default-features = false, features = [
     "wgsl",
 ] }
 wayland-protocols = { version = "0.32.1", features = ["staging"] }
+wayland-protocols-experimental = { path = "../wayland-rs/wayland-protocols-experimental", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 wayland-client = { version = "0.31.5" }
 # web-time = "1.1"
@@ -342,3 +343,10 @@ broken_intra_doc_links = "forbid"
 
 [build-dependencies]
 build_helpers = { path = "./build_helpers" }
+
+[patch.crates-io]
+wayland-client = { path = "../wayland-rs/wayland-client" }
+wayland-protocols = { path = "../wayland-rs/wayland-protocols" }
+wayland-backend = { path = "../wayland-rs/wayland-backend" }
+wayland-scanner = { path = "../wayland-rs/wayland-scanner" }
+wayland-server = { path = "../wayland-rs/wayland-server" }

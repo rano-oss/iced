@@ -17,7 +17,10 @@ pub enum InputMethodEvent {
         anchor: u32,
     },
     /// indicates the cause of surrounding text change
-    TextChangeCause(u32),
+    TextChangeCause {
+        /// Change cause value
+        cause: u32,
+    },
     /// content purpose and hint
     ContentType {
         /// Content hint flags
@@ -25,8 +28,15 @@ pub enum InputMethodEvent {
         /// Content purpose
         purpose: u32,
     },
+    /// Available actions from the text input
+    AvailableActions {
+        /// Bitmask of available actions
+        available_actions: Vec<u8>,
+    },
     /// apply state
     Done,
+    /// The input method is no longer available
+    Unavailable,
 }
 
 /// Input method keyboard events
@@ -37,9 +47,9 @@ pub enum InputMethodKeyboardEvent {
     /// A key is released
     Release(KeyEvent, Key, Modifiers, u32),
     /// A key is repeated
-    Repeat(KeyEvent, Key, Modifiers),
+    Repeat(KeyEvent, Key, Modifiers, u32),
     /// Modifiers are updated
-    Modifiers(Modifiers, RawModifiers),
+    Modifiers(Modifiers),
 }
 
 /// Data associated with a key press or release event.
@@ -75,17 +85,4 @@ pub struct Modifiers {
     pub logo: bool,
     /// The "Num lock" key
     pub num_lock: bool,
-}
-
-/// Raw modifiers
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RawModifiers {
-    /// Modifiers depressed
-    pub mods_depressed: u32,
-    /// Modifiers latched
-    pub mods_latched: u32,
-    /// Modifiers locked
-    pub mods_locked: u32,
-    /// Modifiers group
-    pub group: u32,
 }

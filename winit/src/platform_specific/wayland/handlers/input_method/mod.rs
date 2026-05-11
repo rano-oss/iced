@@ -2,30 +2,29 @@ pub mod keyboard;
 
 use std::sync::{Arc, Mutex};
 
-use cctk::sctk::reexports::calloop::LoopHandle;
 use cctk::sctk::{
     globals::GlobalData,
     reexports::client::{
-        Connection, Dispatch, Proxy, QueueHandle,
+        Connection, Dispatch, Proxy, QueueHandle, WEnum,
         globals::{BindError, GlobalList},
         protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
     },
-    seat::keyboard::Modifiers,
 };
-use wayland_protocols_misc::zwp_input_method_v2::client::{
-    zwp_input_method_keyboard_grab_v2::ZwpInputMethodKeyboardGrabV2,
-    zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
-    zwp_input_method_v2::{self, ZwpInputMethodV2},
-    zwp_input_popup_surface_v2::{self, ZwpInputPopupSurfaceV2},
+use wayland_protocols_experimental::input_method::v1::client::{
+    xx_input_method_manager_v2::XxInputMethodManagerV2,
+    xx_input_method_v1::{self, XxInputMethodV1},
+    xx_input_popup_positioner_v1::XxInputPopupPositionerV1,
+    xx_input_popup_surface_v2::{self, XxInputPopupSurfaceV2},
 };
 
 use crate::platform_specific::wayland::{
-    event_loop::state::{SctkState, send_event},
-    sctk_event::{InputMethodEventVariant, SctkEvent},
+    event_loop::state::{Common, CommonSurface, SctkState, send_event},
+    sctk_event::{
+        InputMethodEventVariant, InputMethodPopupEventVariant, SctkEvent,
+    },
 };
 
-use self::keyboard::InputMethodKeyboardData;
-
+/// Data for InputMethod dispatch
 #[derive(Debug, Clone)]
 pub struct InputMethod {
     pub(crate) inner: Arc<Mutex<Inner>>,
@@ -34,18 +33,20 @@ pub struct InputMethod {
 #[derive(Debug, Default)]
 pub(crate) struct Inner {
     pub(crate) serial: u32,
+    pub(crate) activated: bool,
 }
 
 #[derive(Debug)]
 pub struct InputMethodManager {
-    manager: ZwpInputMethodManagerV2,
+    manager: XxInputMethodManagerV2,
 }
 
 /// State for the input method popup surface
 #[derive(Debug, Clone)]
 pub struct InputMethodPopup {
     pub wl_surface: WlSurface,
-    pub popup_role: Option<ZwpInputPopupSurfaceV2>,
+    pub popup_role: Option<XxInputPopupSurfaceV2>,
+    pub id: crate::core::window::Id,
 }
 
 impl InputMethodManager {
@@ -53,7 +54,7 @@ impl InputMethodManager {
         globals: &GlobalList,
         queue_handle: &QueueHandle<SctkState>,
     ) -> Result<Self, BindError> {
-        let manager = globals.bind(queue_handle, 1..=1, GlobalData)?;
+        let manager = globals.bind(queue_handle, 1..=3, GlobalData)?;
         Ok(Self { manager })
     }
 
@@ -61,77 +62,32 @@ impl InputMethodManager {
         &self,
         seat: &WlSeat,
         queue_handle: &QueueHandle<SctkState>,
-        loop_handle: LoopHandle<'static, SctkState>,
-    ) -> ZwpInputMethodV2 {
-        let mut data = InputMethod {
+        _loop_handle: cctk::sctk::reexports::calloop::LoopHandle<
+            'static,
+            SctkState,
+        >,
+    ) -> XxInputMethodV1 {
+        let data = InputMethod {
             inner: Arc::new(Mutex::new(Inner::default())),
         };
-        let im =
-            self.manager
-                .get_input_method(seat, queue_handle, data.clone());
-        let _ = data.grab_keyboard_with_repeat(
-            queue_handle,
-            &im,
-            None,
-            loop_handle,
-            Box::new(move |state, _kbd: &ZwpInputMethodKeyboardGrabV2, e| {
-                state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-                    variant: crate::platform_specific::wayland::sctk_event::InputMethodKeyboardEventVariant::Repeat(e),
-                });
-            }),
-        )
-        .expect("Input method keyboard grab failed");
-        im
+        self.manager.get_input_method(seat, queue_handle, data)
+    }
+
+    /// Create a positioner for the popup surface
+    pub fn get_positioner(
+        &self,
+        queue_handle: &QueueHandle<SctkState>,
+    ) -> XxInputPopupPositionerV1 {
+        self.manager.get_positioner(queue_handle, ())
     }
 }
 
-impl SctkState {
-    pub fn get_input_method_popup(
-        &mut self,
-        settings: iced_runtime::platform_specific::wayland::input_method_popup::InputMethodPopupSettings,
-    ) -> (iced_runtime::core::window::Id, WlSurface) {
-        let wl_surface =
-            self.compositor_state.create_surface(&self.queue_handle);
-        wl_surface.commit();
-        self.input_method_popup = Some(InputMethodPopup {
-            wl_surface: wl_surface.clone(),
-            popup_role: None,
-        });
-        (settings.id, wl_surface)
-    }
-
-    pub fn show_input_method_popup(&mut self) {
-        let seat = self.seats.first().expect("seat not present");
-        let popup_state = self
-            .input_method_popup
-            .as_mut()
-            .expect("Input Method popup not present");
-        if popup_state.popup_role.is_none() {
-            popup_state.popup_role = seat.input_method.as_ref().map(|im| {
-                im.get_input_popup_surface(
-                    &popup_state.wl_surface,
-                    &self.queue_handle,
-                    popup_state.clone(),
-                )
-            });
-        }
-    }
-
-    pub fn hide_input_method_popup(&mut self) {
-        if let Some(popup_state) = self.input_method_popup.as_mut() {
-            if let Some(popup_role) = popup_state.popup_role.take() {
-                popup_role.destroy();
-            }
-        }
-    }
-}
-
-// Dispatch for ZwpInputMethodManagerV2
-impl Dispatch<ZwpInputMethodManagerV2, GlobalData> for SctkState {
+// Dispatch for XxInputMethodManagerV2
+impl Dispatch<XxInputMethodManagerV2, GlobalData> for SctkState {
     fn event(
         _state: &mut SctkState,
-        _: &ZwpInputMethodManagerV2,
-        _: <ZwpInputMethodManagerV2 as Proxy>::Event,
+        _: &XxInputMethodManagerV2,
+        _: <XxInputMethodManagerV2 as Proxy>::Event,
         _: &GlobalData,
         _: &Connection,
         _: &QueueHandle<SctkState>,
@@ -140,28 +96,48 @@ impl Dispatch<ZwpInputMethodManagerV2, GlobalData> for SctkState {
     }
 }
 
-// Dispatch for ZwpInputMethodV2
-impl Dispatch<ZwpInputMethodV2, InputMethod> for SctkState {
+// Dispatch for XxInputMethodV1
+impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
     fn event(
         state: &mut SctkState,
-        _im: &ZwpInputMethodV2,
-        event: <ZwpInputMethodV2 as Proxy>::Event,
+        im: &XxInputMethodV1,
+        event: <XxInputMethodV1 as Proxy>::Event,
         data: &InputMethod,
         _conn: &Connection,
-        _qh: &QueueHandle<SctkState>,
+        qh: &QueueHandle<SctkState>,
     ) {
         match event {
-            zwp_input_method_v2::Event::Activate => {
+            xx_input_method_v1::Event::Activate { .. } => {
+                data.inner.lock().unwrap().activated = true;
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Activate,
                 });
             }
-            zwp_input_method_v2::Event::Deactivate => {
+            xx_input_method_v1::Event::Deactivate => {
+                data.inner.lock().unwrap().activated = false;
+                // Destroy the popup surface entirely on deactivate
+                if let Some(popup) = state.input_method_popup.take() {
+                    if let Some(role) = popup.popup_role {
+                        role.destroy();
+                    }
+                    let id = popup.id;
+                    // Send Done event BEFORE destroying so sctk_event can look up the surface
+                    send_event(
+                        &state.events_sender,
+                        &state.proxy,
+                        SctkEvent::InputMethodPopupEvent {
+                            variant: InputMethodPopupEventVariant::Done,
+                            id: popup.wl_surface.clone(),
+                        },
+                    );
+                    popup.wl_surface.destroy();
+                    state.id_map.retain(|_, v| *v != id);
+                }
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Deactivate,
                 });
             }
-            zwp_input_method_v2::Event::SurroundingText {
+            xx_input_method_v1::Event::SurroundingText {
                 text,
                 cursor,
                 anchor,
@@ -174,26 +150,93 @@ impl Dispatch<ZwpInputMethodV2, InputMethod> for SctkState {
                     },
                 });
             }
-            zwp_input_method_v2::Event::TextChangeCause { cause } => {
-                state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::TextChangeCause(
-                        cause.into(),
-                    ),
-                });
+            xx_input_method_v1::Event::TextChangeCause { cause } => {
+                if let WEnum::Value(cause) = cause {
+                    state.sctk_events.push(SctkEvent::InputMethodEvent {
+                        variant: InputMethodEventVariant::TextChangeCause(
+                            cause as u32,
+                        ),
+                    });
+                }
             }
-            zwp_input_method_v2::Event::ContentType { hint, purpose } => {
-                state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::ContentType {
-                        hint: hint.into(),
-                        purpose: purpose.into(),
-                    },
-                });
+            xx_input_method_v1::Event::ContentType { hint, purpose } => {
+                if let (WEnum::Value(hint), WEnum::Value(purpose)) =
+                    (hint, purpose)
+                {
+                    state.sctk_events.push(SctkEvent::InputMethodEvent {
+                        variant: InputMethodEventVariant::ContentType {
+                            hint: hint.bits(),
+                            purpose: purpose as u32,
+                        },
+                    });
+                }
             }
-            zwp_input_method_v2::Event::Done => {
+            xx_input_method_v1::Event::Done => {
                 let mut inner = data.inner.lock().unwrap();
                 inner.serial += 1;
+                let activated = inner.activated;
+                drop(inner);
+
+                // If activated and popup doesn't exist yet, create it now
+                if activated {
+                    if state.input_method_popup.is_none() {
+                        if let Some(settings) =
+                            state.input_method_popup_settings.clone()
+                        {
+                            // Get positioner from manager (avoids borrow conflict)
+                            let positioner = state
+                                .input_method_manager
+                                .as_ref()
+                                .map(|m| m.get_positioner(qh));
+                            if let Some(positioner) = positioner {
+                                let (id, wl_surface) =
+                                    state.get_input_method_popup(settings);
+                                // Size hint for constraint calculations - should be generous
+                                positioner.set_size(800, 600);
+                                // Position popup at bottom-left of cursor rect, growing down-right
+                                use wayland_protocols_experimental::input_method::v1::client::xx_input_popup_positioner_v1::{Anchor, Gravity, ConstraintAdjustment};
+                                positioner.set_anchor(Anchor::BottomLeft);
+                                positioner.set_gravity(Gravity::BottomRight);
+                                positioner.set_offset(0, 0);
+                                positioner.set_constraint_adjustment(
+                                    ConstraintAdjustment::FlipY
+                                        | ConstraintAdjustment::SlideX
+                                        | ConstraintAdjustment::SlideY
+                                        | ConstraintAdjustment::ResizeX
+                                        | ConstraintAdjustment::ResizeY,
+                                );
+                                let popup_surface = im.get_input_popup_surface(
+                                    &wl_surface,
+                                    &positioner,
+                                    qh,
+                                    InputMethodPopup {
+                                        wl_surface: wl_surface.clone(),
+                                        popup_role: None,
+                                        id,
+                                    },
+                                );
+                                positioner.destroy();
+                                if let Some(popup_state) =
+                                    state.input_method_popup.as_mut()
+                                {
+                                    popup_state.popup_role =
+                                        Some(popup_surface);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
                     variant: InputMethodEventVariant::Done,
+                });
+            }
+            xx_input_method_v1::Event::SetAvailableActions { .. } => {
+                // TODO: handle available actions
+            }
+            xx_input_method_v1::Event::Unavailable => {
+                state.sctk_events.push(SctkEvent::InputMethodEvent {
+                    variant: InputMethodEventVariant::Unavailable,
                 });
             }
             _ => {}
@@ -201,26 +244,108 @@ impl Dispatch<ZwpInputMethodV2, InputMethod> for SctkState {
     }
 }
 
-// Dispatch for ZwpInputPopupSurfaceV2
-impl Dispatch<ZwpInputPopupSurfaceV2, InputMethodPopup> for SctkState {
+// Dispatch for XxInputPopupPositionerV1 — no events
+impl Dispatch<XxInputPopupPositionerV1, ()> for SctkState {
     fn event(
         _state: &mut SctkState,
-        _popup: &ZwpInputPopupSurfaceV2,
-        event: <ZwpInputPopupSurfaceV2 as Proxy>::Event,
-        _data: &InputMethodPopup,
+        _: &XxInputPopupPositionerV1,
+        _: <XxInputPopupPositionerV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<SctkState>,
+    ) {
+        // Positioner has no events
+    }
+}
+
+// Dispatch for XxInputPopupSurfaceV2
+impl Dispatch<XxInputPopupSurfaceV2, InputMethodPopup> for SctkState {
+    fn event(
+        state: &mut SctkState,
+        popup: &XxInputPopupSurfaceV2,
+        event: <XxInputPopupSurfaceV2 as Proxy>::Event,
+        data: &InputMethodPopup,
         _conn: &Connection,
         _qh: &QueueHandle<SctkState>,
     ) {
         match event {
-            zwp_input_popup_surface_v2::Event::TextInputRectangle {
-                x: _,
-                y: _,
-                width: _,
-                height: _,
+            xx_input_popup_surface_v2::Event::StartConfigure {
+                serial,
+                width,
+                height,
+                ..
             } => {
-                // Could be used to position the popup
+                let wl_surface = &data.wl_surface;
+                // Ack the configure
+                popup.ack_configure(serial);
+                // Ensure frame status is Ready so rendering will happen
+                use crate::platform_specific::wayland::event_loop::state::receive_frame;
+                receive_frame(&mut state.frame_status, wl_surface);
+                state.request_redraw(wl_surface);
+                // Send a configure event so process() can trigger a redraw
+                send_event(
+                    &state.events_sender,
+                    &state.proxy,
+                    SctkEvent::InputMethodPopupEvent {
+                        variant: InputMethodPopupEventVariant::Configure {
+                            width: width as i32,
+                            height: height as i32,
+                        },
+                        id: wl_surface.clone(),
+                    },
+                );
+            }
+            xx_input_popup_surface_v2::Event::Repositioned { .. } => {
+                // Handle repositioned token if needed
             }
             _ => {}
         }
+    }
+}
+
+impl SctkState {
+    pub fn get_input_method_popup(
+        &mut self,
+        settings: iced_runtime::platform_specific::wayland::input_method::InputMethodPopupSettings,
+    ) -> (crate::core::window::Id, WlSurface) {
+        use crate::platform_specific::wayland::event_loop::state::receive_frame;
+
+        let id = settings.id;
+        let wl_surface =
+            self.compositor_state.create_surface(&self.queue_handle);
+        _ = self.id_map.insert(wl_surface.id(), id.clone());
+
+        let common = Arc::new(Mutex::new(Common::from(
+            winit::dpi::LogicalSize::new(settings.size.0, settings.size.1),
+        )));
+
+        wl_surface.commit();
+        self.input_method_popup = Some(InputMethodPopup {
+            wl_surface: wl_surface.clone(),
+            popup_role: None,
+            id,
+        });
+
+        // Set frame status to Ready so the first redraw will actually render
+        receive_frame(&mut self.frame_status, &wl_surface);
+        self.request_redraw(&wl_surface);
+
+        // Send Created event to register with iced's rendering pipeline
+        send_event(
+            &self.events_sender,
+            &self.proxy,
+            SctkEvent::InputMethodPopupEvent {
+                variant: InputMethodPopupEventVariant::Created(
+                    self.queue_handle.clone(),
+                    CommonSurface::InputMethodPopup(wl_surface.clone()),
+                    id,
+                    common,
+                    self.connection.display(),
+                ),
+                id: wl_surface.clone(),
+            },
+        );
+
+        (id, wl_surface)
     }
 }
