@@ -692,6 +692,7 @@ impl SctkState {
             }
         }
 
+        #[cfg(feature = "wayland_input_method")]
         if let Some(popup) = self
             .input_method_popup
             .as_ref()
@@ -1991,8 +1992,6 @@ impl SctkState {
                     }
                 }
             }
-            #[cfg(not(feature = "wayland_input_method"))]
-            Action::InputMethod(_) => {}
         };
         Ok(())
     }
