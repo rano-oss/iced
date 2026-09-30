@@ -45,6 +45,7 @@ wayland_input_method = [
     "wayland-protocols-misc",
     "wayland-protocols-experimental",
     "tempfile",
+    "iced_runtime/wayland_input_method",
 ]
 # Prevents multiple separate process instances.
 single-instance = []

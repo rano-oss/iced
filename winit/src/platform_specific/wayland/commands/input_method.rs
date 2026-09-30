@@ -8,6 +8,9 @@ use iced_runtime::{
 
 use crate::core::window::Id as SurfaceId;
 pub use wayland::input_method::InputMethodPopupSettings;
+pub use wayland::input_method::{
+    Anchor, ConstraintAdjustment, Gravity, PopupPositionMode, PopupPositioner,
+};
 
 /// Set the preedit string displayed to the user.
 pub fn set_preedit_string<Message>(
@@ -64,26 +67,53 @@ pub fn get_input_method_popup<Message>(
     ))
 }
 
-/// Set size of the input method popup.
+/// Set size of the input method popup with default positioner settings.
 pub fn set_size<Message>(
     id: SurfaceId,
     width: u32,
     height: u32,
 ) -> Task<Message> {
+    set_size_with_positioner(id, width, height, PopupPositioner::default())
+}
+
+/// Set size of the input method popup with custom positioner settings.
+///
+/// Use the re-exported `Anchor`, `Gravity`, and `ConstraintAdjustment` types
+/// from this module to configure positioning behavior.
+pub fn set_size_with_positioner<Message>(
+    id: SurfaceId,
+    width: u32,
+    height: u32,
+    positioner: PopupPositioner,
+) -> Task<Message> {
     task::effect(Action::PlatformSpecific(
         platform_specific::Action::Wayland(wayland::Action::InputMethod(
-            wayland::input_method::Action::Size { id, width, height },
+            wayland::input_method::Action::Size {
+                id,
+                width,
+                height,
+                positioner,
+            },
         )),
     ))
 }
 
-/// Freeze or unfreeze the popup position.
-/// When frozen, the compositor will not update the popup position
-/// in response to cursor rectangle changes from the text input.
-pub fn set_frozen<Message>(frozen: bool) -> Task<Message> {
+
+/// Reset the popup's last tracked positioner size.
+/// Call this when the popup is hidden so subsequent size requests start fresh.
+pub fn reset_popup_size<Message>() -> Task<Message> {
     task::effect(Action::PlatformSpecific(
         platform_specific::Action::Wayland(wayland::Action::InputMethod(
-            wayland::input_method::Action::SetFrozen { frozen },
+            wayland::input_method::Action::ResetPopupSize,
+        )),
+    ))
+}
+
+/// Set how the compositor positions the input method popup.
+pub fn set_popup_position_mode<Message>(mode: PopupPositionMode) -> Task<Message> {
+    task::effect(Action::PlatformSpecific(
+        platform_specific::Action::Wayland(wayland::Action::InputMethod(
+            wayland::input_method::Action::SetPopupPositionMode { mode },
         )),
     ))
 }

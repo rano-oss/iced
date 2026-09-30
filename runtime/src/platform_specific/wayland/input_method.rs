@@ -3,6 +3,39 @@
 use iced_core::window::Id;
 use std::fmt;
 
+pub use wayland_protocols_experimental::input_method::zv3::client::zwp_input_popup_positioner_v3::{
+    Anchor, Gravity, ConstraintAdjustment,
+};
+pub use wayland_protocols_experimental::input_method::zv3::client::zwp_input_popup_surface_v3::PopupPositionMode;
+
+/// Positioner settings for popup repositioning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PopupPositioner {
+    /// Anchor point on the cursor rectangle
+    pub anchor: Anchor,
+    /// Direction the popup grows from the anchor
+    pub gravity: Gravity,
+    /// Offset from anchor point (x, y)
+    pub offset: (i32, i32),
+    /// Constraint adjustment flags
+    pub constraint_adjustment: ConstraintAdjustment,
+}
+
+impl Default for PopupPositioner {
+    fn default() -> Self {
+        Self {
+            anchor: Anchor::BottomLeft,
+            gravity: Gravity::BottomRight,
+            offset: (0, 0),
+            constraint_adjustment: ConstraintAdjustment::FlipY
+                | ConstraintAdjustment::SlideX
+                | ConstraintAdjustment::SlideY
+                | ConstraintAdjustment::ResizeX
+                | ConstraintAdjustment::ResizeY,
+        }
+    }
+}
+
 /// Input method popup settings
 #[derive(Debug, Clone)]
 pub struct InputMethodPopupSettings {
@@ -44,7 +77,7 @@ pub enum Action {
         /// settings
         settings: InputMethodPopupSettings,
     },
-    /// Set size of the input method popup
+    /// Reposition the popup with new size and positioner settings
     Size {
         /// id of the popup
         id: Id,
@@ -52,13 +85,16 @@ pub enum Action {
         width: u32,
         /// height
         height: u32,
+        /// Positioner settings (anchor, gravity, offset, constraints)
+        positioner: PopupPositioner,
     },
-    /// Freeze or unfreeze the popup position.
-    /// When frozen, the compositor will not update the popup position
-    /// in response to cursor rectangle changes.
-    SetFrozen {
-        /// Whether to freeze (true) or unfreeze (false)
-        frozen: bool,
+    /// Reset the popup's last tracked positioner size.
+    /// Call this when the popup is hidden so the next show starts fresh.
+    ResetPopupSize,
+    /// Set how the compositor positions the popup relative to the text input cursor.
+    SetPopupPositionMode {
+        /// Positioning mode
+        mode: PopupPositionMode,
     },
 }
 
@@ -87,15 +123,23 @@ impl fmt::Debug for Action {
             Self::Popup { settings } => {
                 f.debug_tuple("Popup").field(settings).finish()
             }
-            Self::Size { id, width, height } => f
+            Self::Size {
+                id,
+                width,
+                height,
+                positioner,
+            } => f
                 .debug_struct("Size")
                 .field("id", id)
                 .field("width", width)
                 .field("height", height)
+                .field("positioner", positioner)
                 .finish(),
-            Self::SetFrozen { frozen } => {
-                f.debug_struct("SetFrozen").field("frozen", frozen).finish()
-            }
+            Self::ResetPopupSize => write!(f, "ResetPopupSize"),
+            Self::SetPopupPositionMode { mode } => f
+                .debug_struct("SetPopupPositionMode")
+                .field("mode", mode)
+                .finish(),
         }
     }
 }

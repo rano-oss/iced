@@ -298,9 +298,9 @@ wgpu = { version = "28.0", default-features = false, features = [
     "wgsl",
 ] }
 wayland-protocols = { version = "0.32.1", features = ["staging"] }
-wayland-protocols-experimental = { path = "../wayland-rs/wayland-protocols-experimental", features = ["client"] }
+wayland-protocols-experimental = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3", features = ["client"] }
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
-wayland-client = { version = "0.31.5" }
+wayland-client = { version = "=0.31.14" }
 # web-time = "1.1"
 
 
@@ -345,8 +345,9 @@ broken_intra_doc_links = "forbid"
 build_helpers = { path = "./build_helpers" }
 
 [patch.crates-io]
-wayland-client = { path = "../wayland-rs/wayland-client" }
-wayland-protocols = { path = "../wayland-rs/wayland-protocols" }
-wayland-backend = { path = "../wayland-rs/wayland-backend" }
-wayland-scanner = { path = "../wayland-rs/wayland-scanner" }
-wayland-server = { path = "../wayland-rs/wayland-server" }
+wayland-client = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }
+wayland-protocols = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }
+wayland-backend = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }
+wayland-scanner = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }
+wayland-server = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }
+wayland-protocols-experimental = { git = "https://github.com/rano-oss/wayland-rs.git", branch = "input-method-unstable-v3" }

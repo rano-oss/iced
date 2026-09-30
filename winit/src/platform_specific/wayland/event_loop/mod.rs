@@ -354,7 +354,7 @@ impl SctkEventLoop {
                 #[cfg(feature = "wayland_input_method")]
                 let input_method_manager = crate::platform_specific::wayland::handlers::input_method::InputMethodManager::new(&globals, &qh).ok();
                 #[cfg(feature = "wayland_input_method")]
-                let keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1> = globals.bind(&qh, 1..=1, cctk::sctk::globals::GlobalData).ok();
+                let keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::zv1::client::zwp_keyboard_filter_manager_v1::ZwpKeyboardFilterManagerV1> = globals.bind(&qh, 1..=1, cctk::sctk::globals::GlobalData).ok();
 
                 let mut state = Self {
                     event_loop,
@@ -446,6 +446,9 @@ impl SctkEventLoop {
                         input_method_popup: None,
                         #[cfg(feature = "wayland_input_method")]
                         input_method_popup_settings: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        pending_popup_position_mode:
+                            iced_runtime::platform_specific::wayland::input_method::PopupPositionMode::FollowCursor,
                         #[cfg(feature = "wayland_input_method")]
                         keyboard_filter: None,
                         #[cfg(feature = "wayland_input_method")]
@@ -561,7 +564,7 @@ impl SctkEventLoop {
                     for s in state.state.layer_surfaces.iter() {
                         surfaces_to_redraw.push(s.surface.wl_surface());
                     }
-                    for s in state.state.popups.iter() {
+                    for s in state.state.popmgr.popups() {
                         surfaces_to_redraw.push(s.popup.wl_surface());
                     }
                     for s in state.state.lock_surfaces.iter() {

@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-pub use xkeysym::Keysym;
 
 use cctk::sctk::reexports::calloop::{
     LoopHandle, RegistrationToken,
@@ -21,9 +20,9 @@ use cctk::sctk::{
 
 use xkbcommon::xkb;
 
-use wayland_protocols_experimental::keyboard_filter::v3::client::{
-    xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1,
-    xx_keyboard_filter_v1::{self, XxKeyboardFilterV1},
+use wayland_protocols_experimental::keyboard_filter::zv1::client::{
+    zwp_keyboard_filter_manager_v1::ZwpKeyboardFilterManagerV1,
+    zwp_keyboard_filter_v1::ZwpKeyboardFilterV1,
 };
 
 use crate::platform_specific::wayland::event_loop::state::SctkState;
@@ -53,11 +52,6 @@ impl Drop for RepeatData {
             self.loop_handle.remove(token);
         }
     }
-}
-
-fn send_event(state: &SctkState, event: SctkEvent) {
-    use crate::platform_specific::wayland::event_loop::state::send_event as do_send;
-    do_send(&state.events_sender, &state.proxy, event);
 }
 
 pub struct InputMethodKeyboardData {
@@ -251,6 +245,11 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                                     Some(guard.key_get_utf8((key + 8).into()))
                                 }
                             }
+                        } else if key_state
+                            == wl_keyboard::KeyState::Repeated
+                        {
+                            // No compose feed on repeats — reuse the mapped char.
+                            Some(guard.key_get_utf8((key + 8).into()))
                         } else {
                             None
                         };
@@ -289,6 +288,19 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                                     variant: InputMethodKeyboardEventVariant::Release(event, serial),
                                 });
                             }
+                            wl_keyboard::KeyState::Repeated => {
+                                // Compositor-owned repeat (wl_keyboard v10+).
+                                // Must carry a real serial so the IME can
+                                // filter/passthrough after preedit clears.
+                                state.sctk_events.push(
+                                    SctkEvent::InputMethodKeyboardEvent {
+                                        variant:
+                                            InputMethodKeyboardEventVariant::Repeat(
+                                                event, serial,
+                                            ),
+                                    },
+                                );
+                            }
                             wl_keyboard::KeyState::Pressed => {
                                 // Push the press event first, before repeat setup
                                 state
@@ -300,6 +312,14 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                                             serial,
                                         ),
                                 });
+
+                                // With keyboard-filter, the compositor owns key
+                                // repeat (wl_keyboard Repeated / press+release).
+                                // Client-side synthetic repeats use serial 0 and
+                                // cannot be passthrough'd after preedit ends.
+                                if state.keyboard_filter.is_some() {
+                                    return;
+                                }
 
                                 if let Some(repeat_data) =
                                     udata.repeat_data.lock().unwrap().as_mut()
@@ -493,14 +513,14 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
     }
 }
 
-// Dispatch for XxKeyboardFilterManagerV1
-impl Dispatch<XxKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
+// Dispatch for ZwpKeyboardFilterManagerV1
+impl Dispatch<ZwpKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
     for SctkState
 {
     fn event(
         _state: &mut SctkState,
-        _: &XxKeyboardFilterManagerV1,
-        _: <XxKeyboardFilterManagerV1 as Proxy>::Event,
+        _: &ZwpKeyboardFilterManagerV1,
+        _: <ZwpKeyboardFilterManagerV1 as Proxy>::Event,
         _: &cctk::sctk::globals::GlobalData,
         _: &Connection,
         _: &QueueHandle<SctkState>,
@@ -509,12 +529,12 @@ impl Dispatch<XxKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
     }
 }
 
-// Dispatch for XxKeyboardFilterV1
-impl Dispatch<XxKeyboardFilterV1, ()> for SctkState {
+// Dispatch for ZwpKeyboardFilterV1
+impl Dispatch<ZwpKeyboardFilterV1, ()> for SctkState {
     fn event(
         _state: &mut SctkState,
-        _: &XxKeyboardFilterV1,
-        _: <XxKeyboardFilterV1 as Proxy>::Event,
+        _: &ZwpKeyboardFilterV1,
+        _: <ZwpKeyboardFilterV1 as Proxy>::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<SctkState>,

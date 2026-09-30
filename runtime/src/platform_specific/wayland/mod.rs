@@ -8,6 +8,7 @@ use iced_core::{Rectangle, window::Id};
 pub mod activation;
 
 /// input method actions
+#[cfg(feature = "wayland_input_method")]
 pub mod input_method;
 
 /// layer surface actions
@@ -41,6 +42,7 @@ pub enum Action {
     /// Blur effect for a surface
     BlurSurface(Id, Option<Vec<Rectangle>>),
     /// Input method action
+    #[cfg(feature = "wayland_input_method")]
     InputMethod(input_method::Action),
 }
 
@@ -82,6 +84,7 @@ impl Debug for Action {
                 .field(id)
                 .field(rectangles)
                 .finish(),
+            #[cfg(feature = "wayland_input_method")]
             Action::InputMethod(action) => {
                 f.debug_tuple("InputMethod").field(action).finish()
             }

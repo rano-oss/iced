@@ -240,6 +240,9 @@ pub enum InputMethodEventVariant {
         hint: u32,
         purpose: u32,
     },
+    AvailableActions {
+        available_actions: Vec<u8>,
+    },
     Done,
     Unavailable,
 }
@@ -1853,6 +1856,11 @@ impl SctkEvent {
                     InputMethodEventVariant::ContentType { hint, purpose } => {
                         InputMethodEvent::ContentType { hint, purpose }
                     }
+                    InputMethodEventVariant::AvailableActions {
+                        available_actions,
+                    } => {
+                        InputMethodEvent::AvailableActions { available_actions }
+                    }
                     InputMethodEventVariant::Done => InputMethodEvent::Done,
                     InputMethodEventVariant::Unavailable => {
                         InputMethodEvent::Unavailable
@@ -2024,18 +2032,16 @@ impl SctkEvent {
                     window.raw.request_redraw();
                 }
                 InputMethodPopupEventVariant::Configure { width, height } => {
+                    // Ack already happened in the Wayland dispatch handler.
+                    // Do NOT force the winit surface to configure W×H — that size
+                    // comes from the positioner (often the default 256×256) and
+                    // fighting layout-driven content size causes visible blink.
+                    // Content size is synced to the positioner via
+                    // reposition_im_popup_if_resized when layout changes.
+                    let _ = (width, height);
                     if let Some(id) = surface_ids.get(&surface.id()) {
                         if let Some(window) = window_manager.get_mut(id.inner())
                         {
-                            if width > 0 && height > 0 {
-                                let s = winit::dpi::Size::Physical(
-                                    PhysicalSize::new(
-                                        width as u32,
-                                        height as u32,
-                                    ),
-                                );
-                                _ = window.raw.request_surface_size(s);
-                            }
                             window.raw.request_redraw();
                         }
                     }

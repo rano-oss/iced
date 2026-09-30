@@ -386,11 +386,40 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &wayland_client::Connection,
         _qh: &wayland_client::QueueHandle<Self>,
-        _keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
+        keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
         _serial: u32,
-        _event: cctk::sctk::seat::keyboard::KeyEvent,
+        event: cctk::sctk::seat::keyboard::KeyEvent,
     ) {
-        // TODO
+        let (is_active, my_seat) =
+            match self.seats.iter_mut().enumerate().find_map(|(i, s)| {
+                if s.kbd.as_ref() == Some(keyboard) {
+                    Some((i, s))
+                } else {
+                    None
+                }
+            }) {
+                Some((i, s)) => (i == 0, s),
+                None => return,
+            };
+        let seat_id = my_seat.seat.clone();
+        let kbd_id = keyboard.clone();
+        if is_active {
+            if let Some(surface) = my_seat.kbd_focus.clone() {
+                self.request_redraw(&surface);
+                let surfaces = self.subsurfaces.iter().filter_map(|s| {
+                    (s.instance.parent == surface)
+                        .then(|| &s.instance.wl_surface)
+                });
+                for surface in surfaces.chain(std::iter::once(&surface)) {
+                    self.sctk_events.push(SctkEvent::KeyboardEvent {
+                        variant: KeyboardEventVariant::Repeat(event.clone()),
+                        kbd_id: kbd_id.clone(),
+                        seat_id: seat_id.clone(),
+                        surface: surface.clone(),
+                    });
+                }
+            }
+        }
     }
 }
 

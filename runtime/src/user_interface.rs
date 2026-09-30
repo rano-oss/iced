@@ -596,6 +596,13 @@ where
         Self::build(self.root, bounds, Cache { state: self.state }, renderer)
     }
 
+    /// Returns the actual content size from the root layout node.
+    /// This is the size the content actually needs, which may be smaller
+    /// than the configured bounds when using `Length::Shrink`.
+    pub fn content_size(&self) -> Size {
+        self.base.size()
+    }
+
     /// Extract the [`Cache`] of the [`UserInterface`], consuming it in the
     /// process.
     pub fn into_cache(self) -> Cache {
