@@ -1429,6 +1429,18 @@ async fn run_instance<P>(
                     if let Some(requested_size) =
                         clipboard.requested_logical_size.lock().unwrap().take()
                     {
+                        // IM popup: ignore empty layout sizes so a one-frame
+                        // hidden candidate list does not shrink the surface.
+                        #[cfg(feature = "wayland_input_method")]
+                        let skip_im_empty = platform_specific_handler
+                            .im_popup_id
+                            == Some(id)
+                            && (requested_size.width <= 0.0
+                                || requested_size.height <= 0.0);
+                        #[cfg(not(feature = "wayland_input_method"))]
+                        let skip_im_empty = false;
+
+                        if !skip_im_empty {
                         let requested_physical_size: PhysicalSize<u32> =
                             winit::dpi::PhysicalSize::from_logical(
                                 requested_size.cast::<u32>(),
@@ -1464,6 +1476,15 @@ async fn run_instance<P>(
                                 id,
                                 window.raw.as_ref(),
                             );
+
+                            // Auto-reposition IM popup when its content size changes
+                            #[cfg(feature = "wayland_input_method")]
+                            platform_specific_handler.reposition_im_popup_if_resized(
+                                id,
+                                requested_size.width as u32,
+                                requested_size.height as u32,
+                            );
+                        }
                         }
                     }
 

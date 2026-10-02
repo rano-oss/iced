@@ -351,6 +351,11 @@ impl SctkEventLoop {
                         }
                     };
 
+                #[cfg(feature = "wayland_input_method")]
+                let input_method_manager = crate::platform_specific::wayland::handlers::input_method::InputMethodManager::new(&globals, &qh).ok();
+                #[cfg(feature = "wayland_input_method")]
+                let keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1> = globals.bind(&qh, 1..=1, cctk::sctk::globals::GlobalData).ok();
+
                 let mut state = Self {
                     event_loop,
                     state: SctkState {
@@ -435,6 +440,19 @@ impl SctkEventLoop {
                         pending_delete: None,
                         pending_commit: None,
                         pending_blur: HashMap::new(),
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_manager,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup_settings: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        pending_popup_position_mode:
+                            iced_runtime::platform_specific::wayland::input_method::PopupPositionMode::FollowCursor,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter_manager,
                     },
                     _features: Default::default(),
                 };
@@ -521,22 +539,34 @@ impl SctkEventLoop {
                     let had_events = !state.state.sctk_events.is_empty();
                     let mut wake_up = had_events;
 
-                    for e in state.state.sctk_events.drain(..) {
-                        if let SctkEvent::Winit(id, e) = e {
-                            _ = state
+                    #[cfg(feature = "wayland_input_method")]
+                    {
+                        let need_popup_redraw =
+                            state.state.sctk_events.iter().any(|e| {
+                                matches!(
+                                    e,
+                                    SctkEvent::InputMethodKeyboardEvent { .. }
+                                )
+                            }) && state.state.input_method_popup.is_some();
+                        if need_popup_redraw {
+                            let s = state
                                 .state
-                                .events_sender
-                                .unbounded_send(Control::Winit(id, e));
-                        } else {
-                            _ =
-                                state
-                                    .state
-                                    .events_sender
-                                    .unbounded_send(Control::PlatformSpecific(
-                                    crate::platform_specific::Event::Wayland(e),
-                                ));
+                                .input_method_popup
+                                .as_ref()
+                                .unwrap()
+                                .wl_surface
+                                .clone();
+                            state.state.request_redraw(&s);
                         }
                     }
+
+                    #[cfg(feature = "wayland_input_method")]
+                    let im_popup_surface =
+                        state.state.input_method_popup.as_ref().map(|p| &p.wl_surface);
+                    #[cfg(not(feature = "wayland_input_method"))]
+                    let im_popup_surface: Option<
+                        &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                    > = None;
 
                     for s in
                         state
@@ -556,6 +586,7 @@ impl SctkEventLoop {
                                     s.session_lock_surface.wl_surface()
                                 }),
                             )
+                            .chain(im_popup_surface)
                     {
                         let id = s.id();
                         if state
@@ -582,6 +613,24 @@ impl SctkEventLoop {
                         );
                     }
 
+                    // After frames so IM keyboard events can request a popup
+                    // redraw before leaving the queue.
+                    for e in state.state.sctk_events.drain(..) {
+                        if let SctkEvent::Winit(id, e) = e {
+                            _ = state
+                                .state
+                                .events_sender
+                                .unbounded_send(Control::Winit(id, e));
+                        } else {
+                            _ =
+                                state
+                                    .state
+                                    .events_sender
+                                    .unbounded_send(Control::PlatformSpecific(
+                                    crate::platform_specific::Event::Wayland(e),
+                                ));
+                        }
+                    }
                     if wake_up {
                         state.state.proxy.wake_up();
                     }

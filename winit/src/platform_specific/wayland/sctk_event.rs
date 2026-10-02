@@ -161,6 +161,16 @@ pub enum SctkEvent {
     },
 
     SubsurfaceEvent(SubsurfaceEventVariant),
+
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopupEvent {
+        variant: InputMethodPopupEventVariant,
+        id: WlSurface,
+    },
+
+    //
+    // output events
+    //
     NewOutput {
         id: WlOutput,
         info: Option<OutputInfo>,
@@ -204,6 +214,47 @@ pub enum SctkEvent {
     },
     Subcompositor(SubsurfaceState),
     ShortcutsInhibited(bool),
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodEvent {
+        variant: InputMethodEventVariant,
+    },
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodKeyboardEvent {
+        variant: InputMethodKeyboardEventVariant,
+    },
+}
+
+/// Input method event variants
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodEventVariant {
+    Activate,
+    Deactivate,
+    SurroundingText {
+        text: String,
+        cursor: u32,
+        anchor: u32,
+    },
+    TextChangeCause(u32),
+    ContentType {
+        hint: u32,
+        purpose: u32,
+    },
+    AvailableActions {
+        available_actions: Vec<u8>,
+    },
+    Done,
+    Unavailable,
+}
+
+/// Input method keyboard event variants
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodKeyboardEventVariant {
+    Press(KeyEvent, Modifiers, u32),
+    Release(KeyEvent, Modifiers, u32),
+    Repeat(KeyEvent, Modifiers, u32),
+    Modifiers(Modifiers),
 }
 
 #[cfg(feature = "a11y")]
@@ -311,6 +362,23 @@ pub enum LayerSurfaceEventVariant {
     Configure(LayerSurfaceConfigure, WlSurface, bool),
     /// Scale Factor
     ScaleFactorChanged(f64, Option<WpViewport>),
+}
+
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodPopupEventVariant {
+    /// Sent after creation of the input method popup surface
+    Created(
+        QueueHandle<SctkState>,
+        CommonSurface,
+        SurfaceId,
+        Arc<Mutex<Common>>,
+        WlDisplay,
+    ),
+    /// Configure event with position/size from compositor
+    Configure { width: i32, height: i32 },
+    /// Done / closed
+    Done,
 }
 
 /// Pending update to a window requested by the user.
@@ -537,6 +605,8 @@ impl SctkEvent {
                                 ),
                             ),
                             SurfaceIdWrapper::Subsurface(id) => None,
+                            #[cfg(feature = "wayland_input_method")]
+                            SurfaceIdWrapper::InputMethodPopup(_) => None,
                         })
                     {
                         events.push((
@@ -599,6 +669,8 @@ impl SctkEvent {
                                     ),
                                 ),
                                 SurfaceIdWrapper::Subsurface(_) => None,
+                                #[cfg(feature = "wayland_input_method")]
+                                SurfaceIdWrapper::InputMethodPopup(_) => None,
                             }
                             .map(|e| (Some(id.inner()), e))
                         })
@@ -1759,6 +1831,255 @@ impl SctkEvent {
                     PlatformSpecific::Wayland(wayland::Event::BlurEnabled),
                 ),
             )),
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodEvent { variant } => {
+                use iced_runtime::core::event::wayland::input_method::InputMethodEvent;
+                let im_event = match variant {
+                    InputMethodEventVariant::Activate => {
+                        InputMethodEvent::Activate
+                    }
+                    InputMethodEventVariant::Deactivate => {
+                        InputMethodEvent::Deactivate
+                    }
+                    InputMethodEventVariant::SurroundingText {
+                        text,
+                        cursor,
+                        anchor,
+                    } => InputMethodEvent::SurroundingText {
+                        text,
+                        cursor,
+                        anchor,
+                    },
+                    InputMethodEventVariant::TextChangeCause(cause) => {
+                        InputMethodEvent::TextChangeCause { cause }
+                    }
+                    InputMethodEventVariant::ContentType { hint, purpose } => {
+                        InputMethodEvent::ContentType { hint, purpose }
+                    }
+                    InputMethodEventVariant::AvailableActions {
+                        available_actions,
+                    } => {
+                        InputMethodEvent::AvailableActions { available_actions }
+                    }
+                    InputMethodEventVariant::Done => InputMethodEvent::Done,
+                    InputMethodEventVariant::Unavailable => {
+                        InputMethodEvent::Unavailable
+                    }
+                };
+                events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            im_event,
+                        )),
+                    ),
+                ));
+            }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodKeyboardEvent { variant } => {
+                use iced_runtime::core::event::wayland::input_method::{
+                    InputMethodKeyboardEvent, KeyEvent as ImKeyEvent,
+                    Modifiers as ImModifiers,
+                };
+                let im_kbd_event = match variant {
+                    InputMethodKeyboardEventVariant::Press(
+                        key_event,
+                        mods,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
+                        InputMethodKeyboardEvent::Press(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            ImModifiers {
+                                ctrl: mods.ctrl,
+                                alt: mods.alt,
+                                shift: mods.shift,
+                                caps_lock: mods.caps_lock,
+                                logo: mods.logo,
+                                num_lock: mods.num_lock,
+                            },
+                            serial,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Release(
+                        key_event,
+                        mods,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
+                        InputMethodKeyboardEvent::Release(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            ImModifiers {
+                                ctrl: mods.ctrl,
+                                alt: mods.alt,
+                                shift: mods.shift,
+                                caps_lock: mods.caps_lock,
+                                logo: mods.logo,
+                                num_lock: mods.num_lock,
+                            },
+                            serial,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Repeat(
+                        key_event,
+                        mods,
+                        serial,
+                    ) => {
+                        let (key, _location) =
+                            keysym_to_vkey_location(key_event.keysym);
+                        InputMethodKeyboardEvent::Repeat(
+                            ImKeyEvent {
+                                time: key_event.time,
+                                raw_code: key_event.raw_code,
+                                keysym: key_event.keysym.raw(),
+                                utf8: key_event.utf8.clone(),
+                            },
+                            key,
+                            ImModifiers {
+                                ctrl: mods.ctrl,
+                                alt: mods.alt,
+                                shift: mods.shift,
+                                caps_lock: mods.caps_lock,
+                                logo: mods.logo,
+                                num_lock: mods.num_lock,
+                            },
+                            serial,
+                        )
+                    }
+                    InputMethodKeyboardEventVariant::Modifiers(mods) => {
+                        InputMethodKeyboardEvent::Modifiers(ImModifiers {
+                            ctrl: mods.ctrl,
+                            alt: mods.alt,
+                            shift: mods.shift,
+                            caps_lock: mods.caps_lock,
+                            logo: mods.logo,
+                            num_lock: mods.num_lock,
+                        })
+                    }
+                };
+                events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(
+                            wayland::Event::InputMethodKeyboard(im_kbd_event),
+                        ),
+                    ),
+                ));
+            }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodPopupEvent {
+                variant,
+                id: surface,
+            } => match variant {
+                InputMethodPopupEventVariant::Created(
+                    queue_handle,
+                    surface,
+                    surface_id,
+                    common,
+                    display,
+                ) => {
+                    let wl_surface = surface.wl_surface();
+                    let object_id = wl_surface.id();
+                    let wrapper =
+                        SurfaceIdWrapper::InputMethodPopup(surface_id.clone());
+                    _ = surface_ids.insert(object_id.clone(), wrapper.clone());
+                    let sctk_winit = SctkWinitWindow::new(
+                        sctk_tx.clone(),
+                        common,
+                        wrapper,
+                        surface,
+                        display,
+                        queue_handle,
+                    );
+                    if compositor.is_none() {
+                        match create_compositor(
+                            sctk_winit.clone(),
+                            create_compositor_data,
+                        )
+                        .await
+                        {
+                            Ok(c) => *compositor = Some(c),
+                            Err(error) => {
+                                control_sender
+                                    .start_send(Control::Crash(
+                                        Error::GraphicsCreationFailed(error),
+                                    ))
+                                    .expect("Send control message");
+                                return;
+                            }
+                        };
+                    }
+                    let compositor = compositor.as_mut().unwrap();
+                    let window = window_manager.insert(
+                        surface_id,
+                        sctk_winit,
+                        program,
+                        compositor,
+                        false,
+                        theme::Mode::None,
+                        0,
+                    );
+                    // IM popup doesn't need a11y adapter — mark ready immediately
+                    window.state.set_a11y_ready(true);
+                    _ = surface_ids.insert(object_id, wrapper.clone());
+                    let logical_size = window.logical_size();
+
+                    let ui = crate::build_user_interface(
+                        program,
+                        user_interface::Cache::default(),
+                        &mut window.renderer,
+                        logical_size,
+                        surface_id,
+                        window.raw.clone(),
+                        window.prev_dnd_destination_rectangles_count,
+                        clipboard,
+                    );
+
+                    let _ = user_interfaces.insert(surface_id, ui);
+                    window.raw.request_redraw();
+                }
+                InputMethodPopupEventVariant::Configure { width, height } => {
+                    // Ack already happened in the Wayland dispatch handler.
+                    // Do NOT force the winit surface to configure W×H — that size
+                    // comes from the positioner (often the default 256×256) and
+                    // fighting layout-driven content size causes visible blink.
+                    // Content size is synced to the positioner via
+                    // reposition_im_popup_if_resized when layout changes.
+                    let _ = (width, height);
+                    if let Some(id) = surface_ids.get(&surface.id()) {
+                        if let Some(window) = window_manager.get_mut(id.inner())
+                        {
+                            window.raw.request_redraw();
+                        }
+                    }
+                }
+                InputMethodPopupEventVariant::Done => {
+                    if let Some(id) = surface_ids.remove(&surface.id()) {
+                        if let Some(w) = window_manager.remove(id.inner()) {
+                            if clipboard
+                                .window_id()
+                                .is_some_and(|cid| w.raw.id() == cid)
+                            {
+                                *clipboard = Clipboard::unconnected();
+                            }
+                        }
+                    }
+                }
+            },
         }
     }
 }
