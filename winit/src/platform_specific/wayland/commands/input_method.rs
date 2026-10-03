@@ -98,7 +98,6 @@ pub fn set_size_with_positioner<Message>(
     ))
 }
 
-
 /// Reset the popup's last tracked positioner size.
 /// Call this when the popup is hidden so subsequent size requests start fresh.
 pub fn reset_popup_size<Message>() -> Task<Message> {
@@ -110,7 +109,9 @@ pub fn reset_popup_size<Message>() -> Task<Message> {
 }
 
 /// Set how the compositor positions the input method popup.
-pub fn set_popup_position_mode<Message>(mode: PopupPositionMode) -> Task<Message> {
+pub fn set_popup_position_mode<Message>(
+    mode: PopupPositionMode,
+) -> Task<Message> {
     task::effect(Action::PlatformSpecific(
         platform_specific::Action::Wayland(wayland::Action::InputMethod(
             wayland::input_method::Action::SetPopupPositionMode { mode },

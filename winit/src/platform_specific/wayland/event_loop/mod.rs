@@ -561,8 +561,11 @@ impl SctkEventLoop {
                     }
 
                     #[cfg(feature = "wayland_input_method")]
-                    let im_popup_surface =
-                        state.state.input_method_popup.as_ref().map(|p| &p.wl_surface);
+                    let im_popup_surface = state
+                        .state
+                        .input_method_popup
+                        .as_ref()
+                        .map(|p| &p.wl_surface);
                     #[cfg(not(feature = "wayland_input_method"))]
                     let im_popup_surface: Option<
                         &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,

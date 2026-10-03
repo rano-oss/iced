@@ -196,7 +196,8 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                         state.input_method_popup_settings.clone()
                     {
                         if state.input_method_popup.is_none() {
-                            let _ = state.get_input_method_popup(settings.clone());
+                            let _ =
+                                state.get_input_method_popup(settings.clone());
                         }
                         let needs_role = state
                             .input_method_popup
@@ -227,7 +228,9 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                                     .input_method_popup
                                     .as_ref()
                                     .map(|popup| popup.wl_surface.clone())
-                                    .expect("input method popup surface must exist");
+                                    .expect(
+                                        "input method popup surface must exist",
+                                    );
                                 let popup_surface = im.get_input_popup_surface(
                                     &wl_surface,
                                     &positioner,

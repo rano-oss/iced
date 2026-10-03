@@ -247,9 +247,7 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                                     Some(guard.key_get_utf8((key + 8).into()))
                                 }
                             }
-                        } else if key_state
-                            == wl_keyboard::KeyState::Repeated
-                        {
+                        } else if key_state == wl_keyboard::KeyState::Repeated {
                             // No compose feed on repeats — reuse the mapped char.
                             Some(guard.key_get_utf8((key + 8).into()))
                         } else {
@@ -298,16 +296,16 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                                 // Compositor-owned repeat (wl_keyboard v10+).
                                 // Must carry a real serial so the IME can
                                 // filter/passthrough after preedit clears.
-                                state.sctk_events.push(
-                                    SctkEvent::InputMethodKeyboardEvent {
-                                        variant:
-                                            InputMethodKeyboardEventVariant::Repeat(
-                                                event,
-                                                udata.update_modifiers(),
-                                                serial,
-                                            ),
-                                    },
-                                );
+                                state
+                                    .sctk_events
+                                    .push(SctkEvent::InputMethodKeyboardEvent {
+                                    variant:
+                                        InputMethodKeyboardEventVariant::Repeat(
+                                            event,
+                                            udata.update_modifiers(),
+                                            serial,
+                                        ),
+                                });
                             }
                             wl_keyboard::KeyState::Pressed => {
                                 // Push the press event first, before repeat setup

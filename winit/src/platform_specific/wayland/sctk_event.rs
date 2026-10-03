@@ -924,36 +924,39 @@ impl SctkEvent {
                         if requested_size.width > 0.0
                             && requested_size.height > 0.0
                         {
-                        let requested_physical_size =
-                            winit::dpi::PhysicalSize::new(
-                                (requested_size.width as f64
-                                    * window.state.scale_factor())
-                                .ceil() as u32,
-                                (requested_size.height as f64
-                                    * window.state.scale_factor())
-                                .ceil() as u32,
-                            );
-                        let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
-                        {
-                            // FIXME what to do when we are stuck in a configure event/resize request loop
-                            // We don't have control over how winit handles this.
-                            window.resize_enabled = true;
+                            let requested_physical_size =
+                                winit::dpi::PhysicalSize::new(
+                                    (requested_size.width as f64
+                                        * window.state.scale_factor())
+                                    .ceil()
+                                        as u32,
+                                    (requested_size.height as f64
+                                        * window.state.scale_factor())
+                                    .ceil()
+                                        as u32,
+                                );
+                            let physical_size = window.state.physical_size();
+                            if requested_physical_size.width
+                                != physical_size.width
+                                || requested_physical_size.height
+                                    != physical_size.height
+                            {
+                                // FIXME what to do when we are stuck in a configure event/resize request loop
+                                // We don't have control over how winit handles this.
+                                window.resize_enabled = true;
 
-                            let s = winit::dpi::Size::Physical(
-                                requested_physical_size,
-                            );
-                            _ = window.raw.request_surface_size(s);
-                            window.raw.set_min_surface_size(Some(s));
-                            window.raw.set_max_surface_size(Some(s));
-                            window.state.synchronize(
-                                &program,
-                                surface_id,
-                                window.raw.as_ref(),
-                            );
-                        }
+                                let s = winit::dpi::Size::Physical(
+                                    requested_physical_size,
+                                );
+                                _ = window.raw.request_surface_size(s);
+                                window.raw.set_min_surface_size(Some(s));
+                                window.raw.set_max_surface_size(Some(s));
+                                window.state.synchronize(
+                                    &program,
+                                    surface_id,
+                                    window.raw.as_ref(),
+                                );
+                            }
                         }
                     }
 
@@ -1139,39 +1142,40 @@ impl SctkEvent {
                             if requested_size.width > 0.0
                                 && requested_size.height > 0.0
                             {
-                            let requested_physical_size =
-                                winit::dpi::PhysicalSize::new(
-                                    (requested_size.width as f64
-                                        * window.state.scale_factor())
-                                    .ceil()
-                                        as u32,
-                                    (requested_size.height as f64
-                                        * window.state.scale_factor())
-                                    .ceil()
-                                        as u32,
-                                );
-                            let physical_size = window.state.physical_size();
-                            if requested_physical_size.width
-                                != physical_size.width
-                                || requested_physical_size.height
-                                    != physical_size.height
-                            {
-                                // FIXME what to do when we are stuck in a configure event/resize request loop
-                                // We don't have control over how winit handles this.
-                                window.resize_enabled = true;
+                                let requested_physical_size =
+                                    winit::dpi::PhysicalSize::new(
+                                        (requested_size.width as f64
+                                            * window.state.scale_factor())
+                                        .ceil()
+                                            as u32,
+                                        (requested_size.height as f64
+                                            * window.state.scale_factor())
+                                        .ceil()
+                                            as u32,
+                                    );
+                                let physical_size =
+                                    window.state.physical_size();
+                                if requested_physical_size.width
+                                    != physical_size.width
+                                    || requested_physical_size.height
+                                        != physical_size.height
+                                {
+                                    // FIXME what to do when we are stuck in a configure event/resize request loop
+                                    // We don't have control over how winit handles this.
+                                    window.resize_enabled = true;
 
-                                let s = winit::dpi::Size::Physical(
-                                    requested_physical_size,
-                                );
-                                _ = window.raw.request_surface_size(s);
-                                window.raw.set_min_surface_size(Some(s));
-                                window.raw.set_max_surface_size(Some(s));
-                                window.state.synchronize(
-                                    &program,
-                                    surface_id,
-                                    window.raw.as_ref(),
-                                );
-                            }
+                                    let s = winit::dpi::Size::Physical(
+                                        requested_physical_size,
+                                    );
+                                    _ = window.raw.request_surface_size(s);
+                                    window.raw.set_min_surface_size(Some(s));
+                                    window.raw.set_max_surface_size(Some(s));
+                                    window.state.synchronize(
+                                        &program,
+                                        surface_id,
+                                        window.raw.as_ref(),
+                                    );
+                                }
                             }
                         }
 
@@ -1390,37 +1394,38 @@ impl SctkEvent {
                 if let Some(requested_size) =
                     clipboard.requested_logical_size.lock().unwrap().take()
                 {
-                    if requested_size.width > 0.0
-                        && requested_size.height > 0.0
+                    if requested_size.width > 0.0 && requested_size.height > 0.0
                     {
-                    let requested_physical_size = winit::dpi::PhysicalSize::new(
-                        (requested_size.width as f64
-                            * window.state.scale_factor())
-                        .ceil() as u32,
-                        (requested_size.height as f64
-                            * window.state.scale_factor())
-                        .ceil() as u32,
-                    );
-                    let physical_size = window.state.physical_size();
-                    if requested_physical_size.width != physical_size.width
-                        || requested_physical_size.height
-                            != physical_size.height
-                    {
-                        // FIXME what to do when we are stuck in a configure event/resize request loop
-                        // We don't have control over how winit handles this.
-                        window.resize_enabled = true;
+                        let requested_physical_size =
+                            winit::dpi::PhysicalSize::new(
+                                (requested_size.width as f64
+                                    * window.state.scale_factor())
+                                .ceil() as u32,
+                                (requested_size.height as f64
+                                    * window.state.scale_factor())
+                                .ceil() as u32,
+                            );
+                        let physical_size = window.state.physical_size();
+                        if requested_physical_size.width != physical_size.width
+                            || requested_physical_size.height
+                                != physical_size.height
+                        {
+                            // FIXME what to do when we are stuck in a configure event/resize request loop
+                            // We don't have control over how winit handles this.
+                            window.resize_enabled = true;
 
-                        let s =
-                            winit::dpi::Size::Physical(requested_physical_size);
-                        _ = window.raw.request_surface_size(s);
-                        window.raw.set_min_surface_size(Some(s));
-                        window.raw.set_max_surface_size(Some(s));
-                        window.state.synchronize(
-                            &program,
-                            surface_id,
-                            window.raw.as_ref(),
-                        );
-                    }
+                            let s = winit::dpi::Size::Physical(
+                                requested_physical_size,
+                            );
+                            _ = window.raw.request_surface_size(s);
+                            window.raw.set_min_surface_size(Some(s));
+                            window.raw.set_max_surface_size(Some(s));
+                            window.state.synchronize(
+                                &program,
+                                surface_id,
+                                window.raw.as_ref(),
+                            );
+                        }
                     }
                 }
                 events.push((
@@ -1725,36 +1730,39 @@ impl SctkEvent {
                         if requested_size.width > 0.0
                             && requested_size.height > 0.0
                         {
-                        let requested_physical_size =
-                            winit::dpi::PhysicalSize::new(
-                                (requested_size.width as f64
-                                    * window.state.scale_factor())
-                                .ceil() as u32,
-                                (requested_size.height as f64
-                                    * window.state.scale_factor())
-                                .ceil() as u32,
-                            );
-                        let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
-                        {
-                            // FIXME what to do when we are stuck in a configure event/resize request loop
-                            // We don't have control over how winit handles this.
-                            window.resize_enabled = true;
+                            let requested_physical_size =
+                                winit::dpi::PhysicalSize::new(
+                                    (requested_size.width as f64
+                                        * window.state.scale_factor())
+                                    .ceil()
+                                        as u32,
+                                    (requested_size.height as f64
+                                        * window.state.scale_factor())
+                                    .ceil()
+                                        as u32,
+                                );
+                            let physical_size = window.state.physical_size();
+                            if requested_physical_size.width
+                                != physical_size.width
+                                || requested_physical_size.height
+                                    != physical_size.height
+                            {
+                                // FIXME what to do when we are stuck in a configure event/resize request loop
+                                // We don't have control over how winit handles this.
+                                window.resize_enabled = true;
 
-                            let s = winit::dpi::Size::Physical(
-                                requested_physical_size,
-                            );
-                            _ = window.raw.request_surface_size(s);
-                            window.raw.set_min_surface_size(Some(s));
-                            window.raw.set_max_surface_size(Some(s));
-                            window.state.synchronize(
-                                &program,
-                                surface_id,
-                                window.raw.as_ref(),
-                            );
-                        }
+                                let s = winit::dpi::Size::Physical(
+                                    requested_physical_size,
+                                );
+                                _ = window.raw.request_surface_size(s);
+                                window.raw.set_min_surface_size(Some(s));
+                                window.raw.set_max_surface_size(Some(s));
+                                window.state.synchronize(
+                                    &program,
+                                    surface_id,
+                                    window.raw.as_ref(),
+                                );
+                            }
                         }
                     }
                     events.push((
