@@ -1140,7 +1140,7 @@ impl<Theme: Catalog, Renderer: text::Renderer> HasSelectableText
         let content = state.paragraph.content();
         let lo = grapheme_to_byte(content, left);
         let hi = grapheme_to_byte(content, right);
-        content.get(lo..hi).map(|s| s.to_owned())
+        content.get(lo..hi).map(str::to_owned)
     }
 
     fn select_all(&self, tree: &mut WidgetTree) {
@@ -1194,7 +1194,7 @@ fn grapheme_to_byte(content: &str, grapheme_index: usize) -> usize {
     content
         .graphemes(true)
         .take(grapheme_index)
-        .map(|g| g.len())
+        .map(str::len)
         .sum()
 }
 
