@@ -1953,7 +1953,6 @@ async fn create_compositor<'a, P>(
 >
 where
     P: Program,
-    <<P as Program>::Renderer as compositor::Default>::Compositor: 'static,
 {
     let (compositor_sender, compositor_receiver) = oneshot::channel();
 
