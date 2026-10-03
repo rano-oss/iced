@@ -63,9 +63,6 @@ impl SurfaceIdWrapper {
 pub struct PlatformSpecific {
     #[cfg(wayland_platform)]
     wayland: WaylandSpecific,
-    /// Window ID of the input method popup (if any), for auto-reposition on resize
-    #[cfg(feature = "wayland_input_method")]
-    pub(crate) im_popup_id: Option<window::Id>,
     /// Last size sent to reposition, to avoid redundant calls
     #[cfg(feature = "wayland_input_method")]
     pub(crate) im_popup_last_size: Option<(u32, u32)>,
@@ -107,12 +104,16 @@ impl PlatformSpecific {
         width: u32,
         height: u32,
     ) {
-        if self.im_popup_id != Some(id) {
+        if width == 0 || height == 0 {
             return;
         }
-        // Empty layout (hidden candidates) must not shrink/sync — that is the
-        // blink when selecting flickers off for a frame.
-        if width == 0 || height == 0 {
+        #[cfg(wayland_platform)]
+        let is_im_popup = self.wayland.surface_ids.values().any(|w| {
+            matches!(w, SurfaceIdWrapper::InputMethodPopup(popup_id) if *popup_id == id)
+        });
+        #[cfg(not(wayland_platform))]
+        let is_im_popup = false;
+        if !is_im_popup {
             return;
         }
         if self.im_popup_last_size == Some((width, height)) {
@@ -264,18 +265,6 @@ pub(crate) async fn handle_event<'a, 'b, P>(
                     create_compositor,
                 )
                 .await;
-
-            // Track IM popup window ID for auto-reposition
-            #[cfg(feature = "wayland_input_method")]
-            {
-                platform_specific.im_popup_id =
-                    platform_specific.wayland.surface_ids.values().find_map(
-                        |w| match w {
-                            SurfaceIdWrapper::InputMethodPopup(id) => Some(*id),
-                            _ => None,
-                        },
-                    );
-            }
         }
     }
 }

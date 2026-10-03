@@ -921,6 +921,9 @@ impl SctkEvent {
                     if let Some(requested_size) =
                         clipboard.requested_logical_size.lock().unwrap().take()
                     {
+                        if requested_size.width > 0.0
+                            && requested_size.height > 0.0
+                        {
                         let requested_physical_size =
                             winit::dpi::PhysicalSize::new(
                                 (requested_size.width as f64
@@ -950,6 +953,7 @@ impl SctkEvent {
                                 surface_id,
                                 window.raw.as_ref(),
                             );
+                        }
                         }
                     }
 
@@ -1132,6 +1136,9 @@ impl SctkEvent {
                             .unwrap()
                             .take()
                         {
+                            if requested_size.width > 0.0
+                                && requested_size.height > 0.0
+                            {
                             let requested_physical_size =
                                 winit::dpi::PhysicalSize::new(
                                     (requested_size.width as f64
@@ -1164,6 +1171,7 @@ impl SctkEvent {
                                     surface_id,
                                     window.raw.as_ref(),
                                 );
+                            }
                             }
                         }
 
@@ -1382,6 +1390,9 @@ impl SctkEvent {
                 if let Some(requested_size) =
                     clipboard.requested_logical_size.lock().unwrap().take()
                 {
+                    if requested_size.width > 0.0
+                        && requested_size.height > 0.0
+                    {
                     let requested_physical_size = winit::dpi::PhysicalSize::new(
                         (requested_size.width as f64
                             * window.state.scale_factor())
@@ -1409,6 +1420,7 @@ impl SctkEvent {
                             surface_id,
                             window.raw.as_ref(),
                         );
+                    }
                     }
                 }
                 events.push((
@@ -1710,6 +1722,9 @@ impl SctkEvent {
                     if let Some(requested_size) =
                         clipboard.requested_logical_size.lock().unwrap().take()
                     {
+                        if requested_size.width > 0.0
+                            && requested_size.height > 0.0
+                        {
                         let requested_physical_size =
                             winit::dpi::PhysicalSize::new(
                                 (requested_size.width as f64
@@ -1739,6 +1754,7 @@ impl SctkEvent {
                                 surface_id,
                                 window.raw.as_ref(),
                             );
+                        }
                         }
                     }
                     events.push((

@@ -228,7 +228,7 @@ pub struct Style {
     /// The default text [`Color`] of the application.
     pub text_color: Color,
 
-    /// The default icon [`iced_core::Color`] of the application.
+    /// The default icon [`Color`] of the application.
     pub icon_color: Color,
 }
 

@@ -221,6 +221,8 @@ where
         adapters: Default::default(),
 
         #[cfg(target_arch = "wasm32")]
+        is_booted: std::rc::Rc::new(std::cell::RefCell::new(false)),
+        #[cfg(target_arch = "wasm32")]
         canvas: None,
     };
 
@@ -426,9 +428,13 @@ where
 
                                 #[cfg(target_arch = "wasm32")]
                                 let window_attributes = {
-                                    use winit::platform::web::WindowAttributesExtWebSys;
-                                    window_attributes
-                                        .with_canvas(self.canvas.take())
+                                    use winit::platform::web::WindowAttributesWeb;
+                                    window_attributes.with_platform_attributes(
+                                        Box::new(
+                                            WindowAttributesWeb::default()
+                                                .with_canvas(self.canvas.take()),
+                                        ),
+                                    )
                                 };
 
                                 log::info!(
@@ -456,11 +462,13 @@ where
 
                                 #[cfg(target_arch = "wasm32")]
                                 {
-                                    use winit::platform::web::WindowExtWebSys;
+                                    use winit::platform::web::WindowExtWeb;
 
                                     let canvas = window
+                                        .as_ref()
                                         .canvas()
-                                        .expect("Get window canvas");
+                                        .expect("Get window canvas")
+                                        .clone();
 
                                     let _ = canvas.set_attribute(
                                         "style",
@@ -681,18 +689,7 @@ where
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        event_loop.run_app(runner).map_err(error::Error::EventLoop)
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        use winit::platform::web::EventLoopExtWebSys;
-        let _ = event_loop.spawn_app(runner);
-
-        Ok(())
-    }
+    event_loop.run_app(runner).map_err(error::Error::EventLoop)
 }
 
 enum Event<Message: 'static> {
@@ -1429,62 +1426,57 @@ async fn run_instance<P>(
                     if let Some(requested_size) =
                         clipboard.requested_logical_size.lock().unwrap().take()
                     {
-                        // IM popup: ignore empty layout sizes so a one-frame
-                        // hidden candidate list does not shrink the surface.
-                        #[cfg(feature = "wayland_input_method")]
-                        let skip_im_empty = platform_specific_handler
-                            .im_popup_id
-                            == Some(id)
-                            && (requested_size.width <= 0.0
-                                || requested_size.height <= 0.0);
-                        #[cfg(not(feature = "wayland_input_method"))]
-                        let skip_im_empty = false;
-
-                        if !skip_im_empty {
-                        let requested_physical_size: PhysicalSize<u32> =
-                            winit::dpi::PhysicalSize::from_logical(
-                                requested_size.cast::<u32>(),
-                                window.state.scale_factor(),
-                            );
-
-                        let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
+                        // Autosize may publish 0×0 when content is hidden; do not
+                        // shrink the surface (same idea as subsurface size requests).
+                        if requested_size.width > 0.0
+                            && requested_size.height > 0.0
                         {
-                            // FIXME what to do when we are stuck in a configure event/resize request loop
-                            // We don't have control over how winit handles this.
-                            window.resize_enabled = true;
-                            resized = true;
-                            needs_redraw = true;
-                            let s = winit::dpi::Size::Logical(
-                                requested_size.cast(),
-                            );
-                            _ = window.raw.request_surface_size(s);
-                            window.raw.set_min_surface_size(Some(s));
-                            window.raw.set_max_surface_size(Some(s));
+                            let requested_physical_size: PhysicalSize<u32> =
+                                winit::dpi::PhysicalSize::from_logical(
+                                    requested_size.cast::<u32>(),
+                                    window.state.scale_factor(),
+                                );
 
-                            window.state.update(
-                                &program,
-                                window.raw.as_ref(),
-                                &WindowEvent::SurfaceResized(
-                                    requested_physical_size,
-                                ),
-                            );
-                            window.state.synchronize(
-                                &program,
-                                id,
-                                window.raw.as_ref(),
-                            );
+                            let physical_size = window.state.physical_size();
+                            if requested_physical_size.width
+                                != physical_size.width
+                                || requested_physical_size.height
+                                    != physical_size.height
+                            {
+                                // FIXME what to do when we are stuck in a configure event/resize request loop
+                                // We don't have control over how winit handles this.
+                                window.resize_enabled = true;
+                                resized = true;
+                                needs_redraw = true;
+                                let s = winit::dpi::Size::Logical(
+                                    requested_size.cast(),
+                                );
+                                _ = window.raw.request_surface_size(s);
+                                window.raw.set_min_surface_size(Some(s));
+                                window.raw.set_max_surface_size(Some(s));
 
-                            // Auto-reposition IM popup when its content size changes
-                            #[cfg(feature = "wayland_input_method")]
-                            platform_specific_handler.reposition_im_popup_if_resized(
-                                id,
-                                requested_size.width as u32,
-                                requested_size.height as u32,
-                            );
-                        }
+                                window.state.update(
+                                    &program,
+                                    window.raw.as_ref(),
+                                    &WindowEvent::SurfaceResized(
+                                        requested_physical_size,
+                                    ),
+                                );
+                                window.state.synchronize(
+                                    &program,
+                                    id,
+                                    window.raw.as_ref(),
+                                );
+
+                                // Sync xx-IM positioner when candidate layout size changes
+                                #[cfg(feature = "wayland_input_method")]
+                                platform_specific_handler
+                                    .reposition_im_popup_if_resized(
+                                        id,
+                                        requested_size.width as u32,
+                                        requested_size.height as u32,
+                                    );
+                            }
                         }
                     }
 
@@ -1961,6 +1953,7 @@ async fn create_compositor<'a, P>(
 >
 where
     P: Program,
+    <<P as Program>::Renderer as compositor::Default>::Compositor: 'static,
 {
     let (compositor_sender, compositor_receiver) = oneshot::channel();
 
