@@ -214,9 +214,10 @@ pub enum SctkEvent {
     },
     Subcompositor(SubsurfaceState),
     ShortcutsInhibited(bool),
+    /// Already in iced_core form (no duplicate variant enum).
     #[cfg(feature = "wayland_input_method")]
     InputMethodEvent {
-        variant: InputMethodEventVariant,
+        event: iced_runtime::core::event::wayland::input_method::InputMethodEvent,
     },
     #[cfg(feature = "wayland_input_method")]
     InputMethodKeyboardEvent {
@@ -224,30 +225,7 @@ pub enum SctkEvent {
     },
 }
 
-/// Input method event variants
-#[cfg(feature = "wayland_input_method")]
-#[derive(Debug, Clone)]
-pub enum InputMethodEventVariant {
-    Activate,
-    Deactivate,
-    SurroundingText {
-        text: String,
-        cursor: u32,
-        anchor: u32,
-    },
-    TextChangeCause(u32),
-    ContentType {
-        hint: u32,
-        purpose: u32,
-    },
-    AvailableActions {
-        available_actions: Vec<u8>,
-    },
-    Done,
-    Unavailable,
-}
-
-/// Input method keyboard event variants
+/// SCTK key events before conversion to iced_core keyboard types.
 #[cfg(feature = "wayland_input_method")]
 #[derive(Debug, Clone)]
 pub enum InputMethodKeyboardEventVariant {
@@ -1856,45 +1834,12 @@ impl SctkEvent {
                 ),
             )),
             #[cfg(feature = "wayland_input_method")]
-            SctkEvent::InputMethodEvent { variant } => {
-                use iced_runtime::core::event::wayland::input_method::InputMethodEvent;
-                let im_event = match variant {
-                    InputMethodEventVariant::Activate => {
-                        InputMethodEvent::Activate
-                    }
-                    InputMethodEventVariant::Deactivate => {
-                        InputMethodEvent::Deactivate
-                    }
-                    InputMethodEventVariant::SurroundingText {
-                        text,
-                        cursor,
-                        anchor,
-                    } => InputMethodEvent::SurroundingText {
-                        text,
-                        cursor,
-                        anchor,
-                    },
-                    InputMethodEventVariant::TextChangeCause(cause) => {
-                        InputMethodEvent::TextChangeCause { cause }
-                    }
-                    InputMethodEventVariant::ContentType { hint, purpose } => {
-                        InputMethodEvent::ContentType { hint, purpose }
-                    }
-                    InputMethodEventVariant::AvailableActions {
-                        available_actions,
-                    } => {
-                        InputMethodEvent::AvailableActions { available_actions }
-                    }
-                    InputMethodEventVariant::Done => InputMethodEvent::Done,
-                    InputMethodEventVariant::Unavailable => {
-                        InputMethodEvent::Unavailable
-                    }
-                };
+            SctkEvent::InputMethodEvent { event } => {
                 events.push((
                     None,
                     iced_runtime::core::Event::PlatformSpecific(
                         PlatformSpecific::Wayland(wayland::Event::InputMethod(
-                            im_event,
+                            event,
                         )),
                     ),
                 ));

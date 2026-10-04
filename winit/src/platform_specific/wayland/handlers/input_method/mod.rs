@@ -17,11 +17,11 @@ use wayland_protocols_experimental::input_method::v1::client::{
     xx_input_popup_surface_v2::{self, XxInputPopupSurfaceV2},
 };
 
+use iced_runtime::core::event::wayland::input_method::InputMethodEvent;
+
 use crate::platform_specific::wayland::{
     event_loop::state::{Common, CommonSurface, SctkState, send_event},
-    sctk_event::{
-        InputMethodEventVariant, InputMethodPopupEventVariant, SctkEvent,
-    },
+    sctk_event::{InputMethodPopupEventVariant, SctkEvent},
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
@@ -123,7 +123,7 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
             xx_input_method_v1::Event::Activate { .. } => {
                 data.inner.lock().unwrap().activated = true;
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::Activate,
+                    event: InputMethodEvent::Activate,
                 });
             }
             xx_input_method_v1::Event::Deactivate => {
@@ -147,7 +147,7 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                     state.id_map.retain(|_, v| *v != id);
                 }
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::Deactivate,
+                    event: InputMethodEvent::Deactivate,
                 });
             }
             xx_input_method_v1::Event::SurroundingText {
@@ -156,7 +156,7 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                 anchor,
             } => {
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::SurroundingText {
+                    event: InputMethodEvent::SurroundingText {
                         text,
                         cursor,
                         anchor,
@@ -166,9 +166,9 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
             xx_input_method_v1::Event::TextChangeCause { cause } => {
                 if let WEnum::Value(cause) = cause {
                     state.sctk_events.push(SctkEvent::InputMethodEvent {
-                        variant: InputMethodEventVariant::TextChangeCause(
-                            cause as u32,
-                        ),
+                        event: InputMethodEvent::TextChangeCause {
+                            cause: cause as u32,
+                        },
                     });
                 }
             }
@@ -177,7 +177,7 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                     (hint, purpose)
                 {
                     state.sctk_events.push(SctkEvent::InputMethodEvent {
-                        variant: InputMethodEventVariant::ContentType {
+                        event: InputMethodEvent::ContentType {
                             hint: hint.bits(),
                             purpose: purpose as u32,
                         },
@@ -253,21 +253,21 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                 }
 
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::Done,
+                    event: InputMethodEvent::Done,
                 });
             }
             xx_input_method_v1::Event::SetAvailableActions {
                 available_actions,
             } => {
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::AvailableActions {
+                    event: InputMethodEvent::AvailableActions {
                         available_actions: available_actions.to_vec(),
                     },
                 });
             }
             xx_input_method_v1::Event::Unavailable => {
                 state.sctk_events.push(SctkEvent::InputMethodEvent {
-                    variant: InputMethodEventVariant::Unavailable,
+                    event: InputMethodEvent::Unavailable,
                 });
             }
             _ => {}
