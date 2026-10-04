@@ -217,7 +217,8 @@ pub enum SctkEvent {
     /// Already in iced_core form (no duplicate variant enum).
     #[cfg(feature = "wayland_input_method")]
     InputMethodEvent {
-        event: iced_runtime::core::event::wayland::input_method::InputMethodEvent,
+        event:
+            iced_runtime::core::event::wayland::input_method::InputMethodEvent,
     },
     #[cfg(feature = "wayland_input_method")]
     InputMethodKeyboardEvent {
