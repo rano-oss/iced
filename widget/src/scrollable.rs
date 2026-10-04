@@ -260,7 +260,8 @@ where
         let padding = new_padding.into().0;
 
         match &mut self.direction {
-            Direction::Horizontal(scrollbar) | Direction::Vertical(scrollbar) => {
+            Direction::Horizontal(scrollbar)
+            | Direction::Vertical(scrollbar) => {
                 scrollbar.padding = padding;
             }
             Direction::Both {
@@ -2386,7 +2387,8 @@ impl Scrollbars {
 
             // The padding is purely visual: it shrinks the top and bottom of the
             // scrollbar without affecting the layout
-            let scrollbar_height = (bounds.height - x_scrollbar_height - 2.0 * padding).max(0.0);
+            let scrollbar_height =
+                (bounds.height - x_scrollbar_height - 2.0 * padding).max(0.0);
 
             // Total bounds of the scrollbar + margin + scroller width
             let total_scrollbar_bounds = Rectangle {
@@ -2462,7 +2464,8 @@ impl Scrollbars {
 
             // The padding is purely visual: it shrinks the left and right ends of
             // the scrollbar without affecting the layout
-            let scrollbar_width = (bounds.width - scrollbar_y_width - 2.0 * padding).max(0.0);
+            let scrollbar_width =
+                (bounds.width - scrollbar_y_width - 2.0 * padding).max(0.0);
 
             // Total bounds of the scrollbar + margin + scroller width
             let total_scrollbar_bounds = Rectangle {

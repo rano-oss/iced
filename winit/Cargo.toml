@@ -37,6 +37,11 @@ program = []
 wayland-dlopen = ["winit/wayland-dlopen"]
 wayland-csd-adwaita = ["winit/wayland-csd-adwaita"]
 a11y = ["iced_accessibility", "iced_runtime/a11y"]
+wayland_input_method = [
+    "wayland",
+    "wayland-protocols-experimental",
+    "iced_runtime/wayland_input_method",
+]
 # Prevents multiple separate process instances.
 single-instance = []
 
@@ -81,6 +86,8 @@ wayland-backend = { version = "0.3.1", features = [
 xkbcommon = { version = "0.7", features = ["wayland"], optional = true }
 xkbcommon-dl = { version = "0.4.1", optional = true }
 xkeysym = { version = "0.2.0", optional = true }
+wayland-protocols-experimental.workspace = true
+wayland-protocols-experimental.optional = true
 rustix = { version = "0.38" }
 
 [target.'cfg(target_os = "windows")'.dependencies]

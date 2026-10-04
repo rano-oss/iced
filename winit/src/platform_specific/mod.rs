@@ -42,6 +42,8 @@ pub enum SurfaceIdWrapper {
     Popup(window::Id),
     SessionLock(window::Id),
     Subsurface(window::Id),
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopup(window::Id),
 }
 impl SurfaceIdWrapper {
     pub fn inner(&self) -> window::Id {
@@ -51,6 +53,8 @@ impl SurfaceIdWrapper {
             SurfaceIdWrapper::Popup(id) => *id,
             SurfaceIdWrapper::SessionLock(id) => *id,
             SurfaceIdWrapper::Subsurface(id) => *id,
+            #[cfg(feature = "wayland_input_method")]
+            SurfaceIdWrapper::InputMethodPopup(id) => *id,
         }
     }
 }
@@ -59,6 +63,9 @@ impl SurfaceIdWrapper {
 pub struct PlatformSpecific {
     #[cfg(wayland_platform)]
     wayland: WaylandSpecific,
+    /// Last size sent to reposition, to avoid redundant calls
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) im_popup_last_size: Option<(u32, u32)>,
 }
 
 impl PlatformSpecific {
@@ -69,6 +76,15 @@ impl PlatformSpecific {
         match action {
             #[cfg(wayland_platform)]
             iced_runtime::platform_specific::Action::Wayland(a) => {
+                #[cfg(feature = "wayland_input_method")]
+                if matches!(
+                    a,
+                    iced_runtime::platform_specific::wayland::Action::InputMethod(
+                        iced_runtime::platform_specific::wayland::input_method::Action::ResetPopupSize
+                    )
+                ) {
+                    self.im_popup_last_size = None;
+                }
                 self.send_wayland(wayland::Action::Action(a));
             }
         }
@@ -77,6 +93,44 @@ impl PlatformSpecific {
     #[cfg(wayland_platform)]
     pub(crate) fn has_popup(&self, toplevel: window::Id) -> bool {
         self.wayland.has_popup(toplevel)
+    }
+
+    /// If the given window ID is the IM popup and the size changed,
+    /// sync the compositor positioner to the new content size.
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) fn reposition_im_popup_if_resized(
+        &mut self,
+        id: window::Id,
+        width: u32,
+        height: u32,
+    ) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        #[cfg(wayland_platform)]
+        let is_im_popup = self.wayland.surface_ids.values().any(|w| {
+            matches!(w, SurfaceIdWrapper::InputMethodPopup(popup_id) if *popup_id == id)
+        });
+        #[cfg(not(wayland_platform))]
+        let is_im_popup = false;
+        if !is_im_popup {
+            return;
+        }
+        if self.im_popup_last_size == Some((width, height)) {
+            return;
+        }
+        self.im_popup_last_size = Some((width, height));
+        use iced_runtime::platform_specific::wayland::{
+            self as runtime_wl, input_method as im,
+        };
+        self.send_action(iced_runtime::platform_specific::Action::Wayland(
+            runtime_wl::Action::InputMethod(im::Action::Size {
+                id,
+                width,
+                height,
+                positioner: im::PopupPositioner::default(),
+            }),
+        ));
     }
 
     pub(crate) fn retain_subsurfaces<F: Fn(window::Id) -> bool>(

@@ -148,6 +148,8 @@ pub(crate) struct SctkSeat {
     pub(crate) icon: Option<CursorIcon>,
     // Application asked for cursor to hide
     pub(crate) hidden: bool,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method: Option<wayland_protocols_experimental::input_method::v1::client::xx_input_method_v1::XxInputMethodV1>,
 }
 
 impl SctkSeat {
@@ -251,6 +253,8 @@ pub enum CommonSurface {
         wl_surface: WlSurface,
         wl_subsurface: WlSubsurface,
     },
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopup(WlSurface),
 }
 
 impl CommonSurface {
@@ -262,6 +266,8 @@ impl CommonSurface {
                 session_lock_surface.wl_surface()
             }
             CommonSurface::Subsurface { wl_surface, .. } => wl_surface,
+            #[cfg(feature = "wayland_input_method")]
+            CommonSurface::InputMethodPopup(wl_surface) => wl_surface,
         };
         wl_surface
     }
@@ -499,6 +505,19 @@ pub struct SctkState {
     pub(crate) preedit: Option<Preedit>,
     pub(crate) pending_delete: Option<(usize, usize)>,
     pub(crate) pending_commit: Option<String>,
+
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_manager: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodManager>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_popup: Option<crate::platform_specific::wayland::handlers::input_method::InputMethodPopup>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) input_method_popup_settings: Option<iced_runtime::platform_specific::wayland::input_method::InputMethodPopupSettings>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) pending_popup_position_mode: iced_runtime::platform_specific::wayland::input_method::PopupPositionMode,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) keyboard_filter: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::XxKeyboardFilterV1>,
+    #[cfg(feature = "wayland_input_method")]
+    pub(crate) keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1>,
 }
 
 /// An error that occurred while running an application.
@@ -670,6 +689,23 @@ impl SctkState {
                     .session_lock_surface
                     .wl_surface()
                     .set_buffer_scale(scale_factor as i32);
+            }
+        }
+
+        #[cfg(feature = "wayland_input_method")]
+        if let Some(popup) = self
+            .input_method_popup
+            .as_ref()
+            .filter(|p| p.wl_surface == *surface)
+        {
+            id = Some(popup.id);
+            if legacy && popup.wp_fractional_scale.is_some() {
+                return;
+            }
+            let mut common = popup.common.lock().unwrap();
+            common.fractional_scale = Some(scale_factor);
+            if legacy {
+                surface.set_buffer_scale(scale_factor as i32);
             }
         }
 
@@ -1870,6 +1906,92 @@ impl SctkState {
                 }.clone();
                 self.apply_blur(id, rectangles, &s)
             },
+            #[cfg(feature = "wayland_input_method")]
+            Action::InputMethod(action) => {
+                use iced_runtime::platform_specific::wayland::input_method;
+                match action {
+                    input_method::Action::Popup { settings } => {
+                        self.input_method_popup_settings = Some(settings);
+                    }
+                    input_method::Action::Size { id: _, width, height, positioner: pos } => {
+                        if let Some(popup) = self.input_method_popup.as_mut() {
+                            // Skip empty layouts (hidden candidates) — avoids blink on
+                            // selection when layout briefly reports 0×0.
+                            if width == 0 || height == 0 {
+                                return Ok(());
+                            }
+                            // Track last positioner size so we can skip no-op repositions.
+                            // Must follow the real content size (not grow-only): near the
+                            // right/bottom screen edge, SlideX/Y place the popup using this
+                            // size — if we keep the session max, backspace leaves a gap.
+                            if (width, height) == popup.max_size {
+                                return Ok(());
+                            }
+                            popup.max_size = (width, height);
+
+                            if let Some(role) = popup.popup_role.as_ref() {
+                                if let Some(manager) = self.input_method_manager.as_ref() {
+                                    let positioner = manager.get_positioner(&self.queue_handle);
+                                    positioner.set_size(width, height);
+                                    positioner.set_anchor(pos.anchor);
+                                    positioner.set_gravity(pos.gravity);
+                                    positioner.set_offset(pos.offset.0, pos.offset.1);
+                                    positioner.set_constraint_adjustment(pos.constraint_adjustment);
+                                    popup.reposition_token += 1;
+                                    role.reposition(&positioner, popup.reposition_token);
+                                    positioner.destroy();
+                                }
+                            }
+                        }
+                    }
+                    input_method::Action::ResetPopupSize => {
+                        if let Some(popup) = self.input_method_popup.as_mut() {
+                            popup.max_size = (0, 0);
+                        }
+                    }
+                    input_method::Action::SetPopupPositionMode { mode } => {
+                        self.pending_popup_position_mode = mode;
+                        if let Some(popup) = self.input_method_popup.as_ref() {
+                            if let Some(role) = popup.popup_role.as_ref() {
+                                role.set_popup_position_mode(mode);
+                            }
+                        }
+                    }
+                    action => {
+                        let seat = self.seats.first();
+                        let im = seat.and_then(|s| s.input_method.as_ref());
+                        if let Some(im) = im {
+                            match action {
+                                input_method::Action::SetPreeditString { string, cursor_begin, cursor_end } => {
+                                    im.set_preedit_string(string, cursor_begin, cursor_end);
+                                }
+                                input_method::Action::CommitString(string) => {
+                                    im.commit_string(string);
+                                }
+                                input_method::Action::Commit => {
+                                    use crate::platform_specific::wayland::handlers::input_method::InputMethod;
+                                    let serial = im.data::<InputMethod>()
+                                        .map(|d| d.inner.lock().unwrap().serial)
+                                        .unwrap_or(0);
+                                    im.commit(serial);
+                                }
+                                input_method::Action::FilterKey(serial, consumed) => {
+                                    if let Some(kf) = self.keyboard_filter.as_ref() {
+                                        use wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::FilterAction;
+                                        let action = if consumed {
+                                            FilterAction::Consume
+                                        } else {
+                                            FilterAction::Passthrough
+                                        };
+                                        kf.filter(serial, action);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
         };
         Ok(())
     }

@@ -100,7 +100,7 @@ pub(crate) struct WaylandSpecific {
     display_handle: Option<OwnedDisplayHandle>,
     conn: Option<Connection>,
     modifiers: Modifiers,
-    surface_ids: HashMap<ObjectId, SurfaceIdWrapper>,
+    pub(crate) surface_ids: HashMap<ObjectId, SurfaceIdWrapper>,
     subsurface_state: Option<SubsurfaceState>,
     surface_subsurfaces: HashMap<window::Id, Vec<SubsurfaceInstance>>,
     popup_toplevels: HashMap<ObjectId, window::Id>,
