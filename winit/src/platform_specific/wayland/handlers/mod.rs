@@ -2,6 +2,8 @@
 pub mod activation;
 pub mod compositor;
 pub mod ext_background_effect;
+#[cfg(feature = "wayland_input_method")]
+pub mod input_method;
 pub mod output;
 pub mod overlap;
 pub mod seat;
