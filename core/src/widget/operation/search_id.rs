@@ -1,7 +1,11 @@
 //! Search for widgets with the target Id.
 
 use super::Operation;
-use crate::{Rectangle, id::Id, widget::operation::Outcome};
+use crate::{
+    Rectangle,
+    id::Id,
+    widget::operation::Outcome,
+};
 
 /// Produces an [`Operation`] that searches for the Id
 pub fn search_id(target: Id) -> impl Operation<Id> {

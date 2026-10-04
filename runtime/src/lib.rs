@@ -153,9 +153,9 @@ pub struct Appearance {
     pub icon_color: iced_core::Color,
 }
 
-/// The default style of a program.
+/// The default style of a [`Program`].
 pub trait DefaultStyle {
-    /// Returns the default style of a program.
+    /// Returns the default style of a [`Program`].
     fn default_style(&self) -> Appearance;
 }
 
@@ -165,7 +165,7 @@ impl DefaultStyle for iced_core::Theme {
     }
 }
 
-/// The default [`Appearance`] of a program with the built-in [`iced_core::Theme`].
+/// The default [`Appearance`] of a [`Program`] with the built-in [`iced_core::Theme`].
 pub fn default(theme: &iced_core::Theme) -> Appearance {
     let palette = theme.extended_palette();
 

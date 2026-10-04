@@ -3,8 +3,6 @@ on: [push, pull_request]
 jobs:
   all:
     runs-on: ubuntu-latest
-    # Inherited pop-os iced clippy debt; Check+Format are the hard gates here.
-    continue-on-error: true
     steps:
     - uses: hecrj/setup-rust-action@v2
       with:

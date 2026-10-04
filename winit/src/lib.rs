@@ -432,9 +432,7 @@ where
                                     window_attributes.with_platform_attributes(
                                         Box::new(
                                             WindowAttributesWeb::default()
-                                                .with_canvas(
-                                                    self.canvas.take(),
-                                                ),
+                                                .with_canvas(self.canvas.take()),
                                         ),
                                     )
                                 };

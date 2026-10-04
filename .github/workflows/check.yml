@@ -1,12 +1,8 @@
 name: Check
 on: [push, pull_request]
 jobs:
-  # pop-os/winit 0.31 web API still leaves iced_winit compositor futures
-  # non-'static on wasm; Cosmic desktop does not ship wasm. Keep the job for
-  # signal but do not fail the workflow on it.
   wasm:
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       RUSTFLAGS: --cfg=web_sys_unstable_apis
     steps:
