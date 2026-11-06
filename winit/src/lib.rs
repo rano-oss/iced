@@ -221,8 +221,6 @@ where
         adapters: Default::default(),
 
         #[cfg(target_arch = "wasm32")]
-        is_booted: std::rc::Rc::new(std::cell::RefCell::new(false)),
-        #[cfg(target_arch = "wasm32")]
         canvas: None,
     };
 
@@ -428,15 +426,9 @@ where
 
                                 #[cfg(target_arch = "wasm32")]
                                 let window_attributes = {
-                                    use winit::platform::web::WindowAttributesWeb;
-                                    window_attributes.with_platform_attributes(
-                                        Box::new(
-                                            WindowAttributesWeb::default()
-                                                .with_canvas(
-                                                    self.canvas.take(),
-                                                ),
-                                        ),
-                                    )
+                                    use winit::platform::web::WindowAttributesExtWebSys;
+                                    window_attributes
+                                        .with_canvas(self.canvas.take())
                                 };
 
                                 log::info!(
@@ -464,13 +456,11 @@ where
 
                                 #[cfg(target_arch = "wasm32")]
                                 {
-                                    use winit::platform::web::WindowExtWeb;
+                                    use winit::platform::web::WindowExtWebSys;
 
                                     let canvas = window
-                                        .as_ref()
                                         .canvas()
-                                        .expect("Get window canvas")
-                                        .clone();
+                                        .expect("Get window canvas");
 
                                     let _ = canvas.set_attribute(
                                         "style",
@@ -691,7 +681,18 @@ where
         }
     }
 
-    event_loop.run_app(runner).map_err(error::Error::EventLoop)
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        event_loop.run_app(runner).map_err(error::Error::EventLoop)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        let _ = event_loop.spawn_app(runner);
+
+        Ok(())
+    }
 }
 
 enum Event<Message: 'static> {
