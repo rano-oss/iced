@@ -76,9 +76,13 @@ impl InputMethodKeyboardData {
 
     pub fn update_modifiers(&self) -> Modifiers {
         let guard = self.xkb_state.lock().unwrap();
-        let Some(state) = guard.as_ref() else {
-            return Modifiers::default();
-        };
+        guard
+            .as_ref()
+            .map(Self::modifiers_from_state)
+            .unwrap_or_default()
+    }
+
+    fn modifiers_from_state(state: &xkb::State) -> Modifiers {
         Modifiers {
             ctrl: state.mod_name_is_active(
                 xkb::MOD_NAME_CTRL,
@@ -155,13 +159,17 @@ impl InputMethodKeyboardData {
             }
             _ => None,
         };
+        // Read mods while we already hold xkb_state — do not call
+        // update_modifiers() here (that would re-lock and deadlock).
+        let mods = Self::modifiers_from_state(guard);
+        drop(state_guard);
+
         let event = KeyEvent {
             time,
             raw_code: key,
             keysym: keysym.into(),
             utf8,
         };
-        let mods = self.update_modifiers();
         let variant = match key_state {
             wl_keyboard::KeyState::Released => {
                 InputMethodKeyboardEventVariant::Release(event, mods, serial)

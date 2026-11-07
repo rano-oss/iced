@@ -1429,60 +1429,58 @@ async fn run_instance<P>(
                     if let Some(requested_size) =
                         clipboard.requested_logical_size.lock().unwrap().take()
                     {
-                        // Autosize may publish 0×0 when content is hidden; do not
-                        // shrink the surface (same idea as subsurface size requests).
+                        let requested_physical_size: PhysicalSize<u32> =
+                            winit::dpi::PhysicalSize::from_logical(
+                                requested_size.cast::<u32>(),
+                                window.state.scale_factor(),
+                            );
+
+                        let physical_size = window.state.physical_size();
+                        // Skip 0×0 autosize (hidden content) — same idea as
+                        // subsurface size requests — and no-op same-size.
                         if requested_size.width > 0.0
                             && requested_size.height > 0.0
-                        {
-                            let requested_physical_size: PhysicalSize<u32> =
-                                winit::dpi::PhysicalSize::from_logical(
-                                    requested_size.cast::<u32>(),
-                                    window.state.scale_factor(),
-                                );
-
-                            let physical_size = window.state.physical_size();
-                            if requested_physical_size.width
+                            && (requested_physical_size.width
                                 != physical_size.width
                                 || requested_physical_size.height
-                                    != physical_size.height
-                            {
-                                // FIXME what to do when we are stuck in a configure event/resize request loop
-                                // We don't have control over how winit handles this.
-                                window.resize_enabled = true;
-                                resized = true;
-                                needs_redraw = true;
-                                let s = winit::dpi::Size::Logical(
-                                    requested_size.cast(),
-                                );
-                                _ = window.raw.request_surface_size(s);
-                                window.raw.set_min_surface_size(Some(s));
-                                window.raw.set_max_surface_size(Some(s));
+                                    != physical_size.height)
+                        {
+                            // FIXME what to do when we are stuck in a configure event/resize request loop
+                            // We don't have control over how winit handles this.
+                            window.resize_enabled = true;
+                            resized = true;
+                            needs_redraw = true;
+                            let s = winit::dpi::Size::Logical(
+                                requested_size.cast(),
+                            );
+                            _ = window.raw.request_surface_size(s);
+                            window.raw.set_min_surface_size(Some(s));
+                            window.raw.set_max_surface_size(Some(s));
 
-                                window.state.update(
-                                    &program,
-                                    window.raw.as_ref(),
-                                    &WindowEvent::SurfaceResized(
-                                        requested_physical_size,
-                                    ),
-                                );
-                                window.state.synchronize(
-                                    &program,
+                            window.state.update(
+                                &program,
+                                window.raw.as_ref(),
+                                &WindowEvent::SurfaceResized(
+                                    requested_physical_size,
+                                ),
+                            );
+                            window.state.synchronize(
+                                &program,
+                                id,
+                                window.raw.as_ref(),
+                            );
+
+                            // Sync xx-IM positioner when candidate layout size changes
+                            #[cfg(all(
+                                feature = "wayland_input_method",
+                                wayland_platform
+                            ))]
+                            platform_specific_handler
+                                .reposition_im_popup_if_resized(
                                     id,
-                                    window.raw.as_ref(),
+                                    requested_size.width as u32,
+                                    requested_size.height as u32,
                                 );
-
-                                // Sync xx-IM positioner when candidate layout size changes
-                                #[cfg(all(
-                                    feature = "wayland_input_method",
-                                    wayland_platform
-                                ))]
-                                platform_specific_handler
-                                    .reposition_im_popup_if_resized(
-                                        id,
-                                        requested_size.width as u32,
-                                        requested_size.height as u32,
-                                    );
-                            }
                         }
                     }
 
