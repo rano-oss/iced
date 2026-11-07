@@ -56,7 +56,6 @@ impl Drop for RepeatData {
 
 pub struct InputMethodKeyboardData {
     xkb_context: Mutex<xkb::Context>,
-    user_specified_rmlvo: bool,
     xkb_state: Mutex<Option<xkb::State>>,
     xkb_compose: Mutex<Option<xkb::compose::State>>,
     pub(crate) repeat_data: Arc<Mutex<Option<RepeatData>>>,
@@ -109,7 +108,6 @@ impl InputMethodKeyboardData {
 
         InputMethodKeyboardData {
             xkb_context: Mutex::new(xkb_context),
-            user_specified_rmlvo: false,
             xkb_state: Mutex::new(None),
             xkb_compose: Mutex::new(xkb_compose),
             repeat_data: Arc::new(Mutex::new(Some(RepeatData {
@@ -154,6 +152,32 @@ impl InputMethodKeyboardData {
             ),
         }
     }
+
+    fn utf8_for_keysym(
+        &self,
+        xkb_state: &xkb::State,
+        keysym: xkb::Keysym,
+        raw_code: u32,
+        feed_compose: bool,
+    ) -> Option<String> {
+        if !feed_compose {
+            return Some(xkb_state.key_get_utf8((raw_code + 8).into()));
+        }
+        let mut compose = self.xkb_compose.lock().unwrap();
+        match compose.as_mut() {
+            Some(compose) => match compose.feed(keysym) {
+                xkb::FeedResult::Ignored => None,
+                xkb::FeedResult::Accepted => match compose.status() {
+                    xkb::Status::Composed => compose.utf8(),
+                    xkb::Status::Nothing => {
+                        Some(xkb_state.key_get_utf8((raw_code + 8).into()))
+                    }
+                    _ => None,
+                },
+            },
+            None => Some(xkb_state.key_get_utf8((raw_code + 8).into())),
+        }
+    }
 }
 
 // Dispatch for WlKeyboard with InputMethodKeyboardData
@@ -175,10 +199,6 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                         log::warn!(target: "sctk", "non-xkb compatible keymap");
                     }
                     wl_keyboard::KeymapFormat::XkbV1 => {
-                        if udata.user_specified_rmlvo {
-                            return;
-                        }
-
                         let context = udata.xkb_context.lock().unwrap();
 
                         #[allow(unused_unsafe)]
@@ -224,35 +244,14 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
 
                     if let Some(guard) = state_guard.as_ref() {
                         let keysym = guard.key_get_one_sym((key + 8).into());
-                        let utf8 = if key_state
-                            == wl_keyboard::KeyState::Pressed
-                        {
-                            let mut compose = udata.xkb_compose.lock().unwrap();
-
-                            match compose.as_mut() {
-                                Some(compose) => match compose.feed(keysym) {
-                                    xkb::FeedResult::Ignored => None,
-                                    xkb::FeedResult::Accepted => match compose
-                                        .status()
-                                    {
-                                        xkb::Status::Composed => compose.utf8(),
-                                        xkb::Status::Nothing => Some(
-                                            guard
-                                                .key_get_utf8((key + 8).into()),
-                                        ),
-                                        _ => None,
-                                    },
-                                },
-                                None => {
-                                    Some(guard.key_get_utf8((key + 8).into()))
-                                }
-                            }
-                        } else if key_state == wl_keyboard::KeyState::Repeated {
-                            // No compose feed on repeats — reuse the mapped char.
-                            Some(guard.key_get_utf8((key + 8).into()))
-                        } else {
-                            None
-                        };
+                        let utf8 =
+                            match key_state {
+                                wl_keyboard::KeyState::Pressed => udata
+                                    .utf8_for_keysym(guard, keysym, key, true),
+                                wl_keyboard::KeyState::Repeated => udata
+                                    .utf8_for_keysym(guard, keysym, key, false),
+                                _ => None,
+                            };
 
                         drop(state_guard);
 
@@ -455,30 +454,12 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                     udata.repeat_data.lock().unwrap().as_mut()
                 {
                     if let Some(mut event) = repeat_data.current_repeat.take() {
-                        event.key.utf8 = {
-                            let mut compose = udata.xkb_compose.lock().unwrap();
-                            match compose.as_mut() {
-                                Some(compose) => match compose
-                                    .feed(event.key.keysym.into())
-                                {
-                                    xkb::FeedResult::Ignored => None,
-                                    xkb::FeedResult::Accepted => match compose
-                                        .status()
-                                    {
-                                        xkb::Status::Composed => compose.utf8(),
-                                        xkb::Status::Nothing => {
-                                            Some(xkb_state.key_get_utf8(
-                                                (event.key.raw_code + 8).into(),
-                                            ))
-                                        }
-                                        _ => None,
-                                    },
-                                },
-                                None => Some(xkb_state.key_get_utf8(
-                                    (event.key.raw_code + 8).into(),
-                                )),
-                            }
-                        };
+                        event.key.utf8 = udata.utf8_for_keysym(
+                            xkb_state,
+                            event.key.keysym.into(),
+                            event.key.raw_code,
+                            true,
+                        );
                         repeat_data.current_repeat = Some(event);
                     }
                 }

@@ -75,10 +75,6 @@ impl InputMethodManager {
         &self,
         seat: &WlSeat,
         queue_handle: &QueueHandle<SctkState>,
-        _loop_handle: cctk::sctk::reexports::calloop::LoopHandle<
-            'static,
-            SctkState,
-        >,
     ) -> XxInputMethodV1 {
         let data = InputMethod {
             inner: Arc::new(Mutex::new(Inner::default())),
@@ -86,12 +82,20 @@ impl InputMethodManager {
         self.manager.get_input_method(seat, queue_handle, data)
     }
 
-    /// Create a positioner for the popup surface
-    pub fn get_positioner(
+    /// Create a positioner configured with size and placement settings.
+    pub fn create_positioner(
         &self,
         queue_handle: &QueueHandle<SctkState>,
+        size: (u32, u32),
+        pos: &iced_runtime::platform_specific::wayland::input_method::PopupPositioner,
     ) -> XxInputPopupPositionerV1 {
-        self.manager.get_positioner(queue_handle, ())
+        let positioner = self.manager.get_positioner(queue_handle, ());
+        positioner.set_size(size.0, size.1);
+        positioner.set_anchor(pos.anchor);
+        positioner.set_gravity(pos.gravity);
+        positioner.set_offset(pos.offset.0, pos.offset.1);
+        positioner.set_constraint_adjustment(pos.constraint_adjustment);
+        positioner
     }
 }
 
@@ -204,26 +208,16 @@ impl Dispatch<XxInputMethodV1, InputMethod> for SctkState {
                             .as_ref()
                             .is_some_and(|popup| popup.popup_role.is_none());
                         if needs_role {
-                            // Get positioner from manager (avoids borrow conflict)
-                            let positioner = state
-                                .input_method_manager
-                                .as_ref()
-                                .map(|m| m.get_positioner(qh));
+                            use iced_runtime::platform_specific::wayland::input_method::PopupPositioner;
+                            let positioner =
+                                state.input_method_manager.as_ref().map(|m| {
+                                    m.create_positioner(
+                                        qh,
+                                        settings.size,
+                                        &PopupPositioner::default(),
+                                    )
+                                });
                             if let Some(positioner) = positioner {
-                                positioner
-                                    .set_size(settings.size.0, settings.size.1);
-                                // Position popup at bottom-left of cursor rect, growing down-right
-                                use wayland_protocols_experimental::input_method::v1::client::xx_input_popup_positioner_v1::{Anchor, Gravity, ConstraintAdjustment};
-                                positioner.set_anchor(Anchor::BottomLeft);
-                                positioner.set_gravity(Gravity::BottomRight);
-                                positioner.set_offset(0, 0);
-                                positioner.set_constraint_adjustment(
-                                    ConstraintAdjustment::FlipY
-                                        | ConstraintAdjustment::SlideX
-                                        | ConstraintAdjustment::SlideY
-                                        | ConstraintAdjustment::ResizeX
-                                        | ConstraintAdjustment::ResizeY,
-                                );
                                 let wl_surface = state
                                     .input_method_popup
                                     .as_ref()

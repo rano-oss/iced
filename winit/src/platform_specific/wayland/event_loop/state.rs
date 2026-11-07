@@ -1913,36 +1913,49 @@ impl SctkState {
                     input_method::Action::Popup { settings } => {
                         self.input_method_popup_settings = Some(settings);
                     }
-                    input_method::Action::Size { id: _, width, height, positioner: pos } => {
-                        if let Some(popup) = self.input_method_popup.as_mut() {
-                            // Skip empty layouts (hidden candidates) — avoids blink on
-                            // selection when layout briefly reports 0×0.
-                            if width == 0 || height == 0 {
-                                return Ok(());
-                            }
-                            // Track last positioner size so we can skip no-op repositions.
-                            // Must follow the real content size (not grow-only): near the
-                            // right/bottom screen edge, SlideX/Y place the popup using this
-                            // size — if we keep the session max, backspace leaves a gap.
-                            if (width, height) == popup.max_size {
-                                return Ok(());
-                            }
-                            popup.max_size = (width, height);
-
-                            if let Some(role) = popup.popup_role.as_ref() {
-                                if let Some(manager) = self.input_method_manager.as_ref() {
-                                    let positioner = manager.get_positioner(&self.queue_handle);
-                                    positioner.set_size(width, height);
-                                    positioner.set_anchor(pos.anchor);
-                                    positioner.set_gravity(pos.gravity);
-                                    positioner.set_offset(pos.offset.0, pos.offset.1);
-                                    positioner.set_constraint_adjustment(pos.constraint_adjustment);
-                                    popup.reposition_token += 1;
-                                    role.reposition(&positioner, popup.reposition_token);
-                                    positioner.destroy();
-                                }
-                            }
+                    input_method::Action::Size {
+                        id: _,
+                        width,
+                        height,
+                        positioner: pos,
+                    } => {
+                        let Some(popup) = self.input_method_popup.as_mut()
+                        else {
+                            return Ok(());
+                        };
+                        // Skip empty layouts (hidden candidates) — avoids blink
+                        // when layout briefly reports 0×0. Also the sole
+                        // zero-size / no-op gate for IM popup resizing.
+                        if width == 0 || height == 0 {
+                            return Ok(());
                         }
+                        // Follow real content size (not grow-only): near the
+                        // right/bottom edge, SlideX/Y place using this size —
+                        // keeping a session max leaves a gap on backspace.
+                        if (width, height) == popup.max_size {
+                            return Ok(());
+                        }
+                        popup.max_size = (width, height);
+
+                        let Some(role) = popup.popup_role.as_ref() else {
+                            return Ok(());
+                        };
+                        let Some(manager) =
+                            self.input_method_manager.as_ref()
+                        else {
+                            return Ok(());
+                        };
+                        let positioner = manager.create_positioner(
+                            &self.queue_handle,
+                            (width, height),
+                            &pos,
+                        );
+                        popup.reposition_token += 1;
+                        role.reposition(
+                            &positioner,
+                            popup.reposition_token,
+                        );
+                        positioner.destroy();
                     }
                     input_method::Action::ResetPopupSize => {
                         if let Some(popup) = self.input_method_popup.as_mut() {
@@ -1957,37 +1970,57 @@ impl SctkState {
                             }
                         }
                     }
-                    action => {
-                        let seat = self.seats.first();
-                        let im = seat.and_then(|s| s.input_method.as_ref());
-                        if let Some(im) = im {
-                            match action {
-                                input_method::Action::SetPreeditString { string, cursor_begin, cursor_end } => {
-                                    im.set_preedit_string(string, cursor_begin, cursor_end);
-                                }
-                                input_method::Action::CommitString(string) => {
-                                    im.commit_string(string);
-                                }
-                                input_method::Action::Commit => {
-                                    use crate::platform_specific::wayland::handlers::input_method::InputMethod;
-                                    let serial = im.data::<InputMethod>()
-                                        .map(|d| d.inner.lock().unwrap().serial)
-                                        .unwrap_or(0);
-                                    im.commit(serial);
-                                }
-                                input_method::Action::FilterKey(serial, consumed) => {
-                                    if let Some(kf) = self.keyboard_filter.as_ref() {
-                                        use wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::FilterAction;
-                                        let action = if consumed {
-                                            FilterAction::Consume
-                                        } else {
-                                            FilterAction::Passthrough
-                                        };
-                                        kf.filter(serial, action);
-                                    }
-                                }
-                                _ => {}
-                            }
+                    input_method::Action::SetPreeditString {
+                        string,
+                        cursor_begin,
+                        cursor_end,
+                    } => {
+                        if let Some(im) = self
+                            .seats
+                            .first()
+                            .and_then(|s| s.input_method.as_ref())
+                        {
+                            im.set_preedit_string(
+                                string,
+                                cursor_begin,
+                                cursor_end,
+                            );
+                        }
+                    }
+                    input_method::Action::CommitString(string) => {
+                        if let Some(im) = self
+                            .seats
+                            .first()
+                            .and_then(|s| s.input_method.as_ref())
+                        {
+                            im.commit_string(string);
+                        }
+                    }
+                    input_method::Action::Commit => {
+                        if let Some(im) = self
+                            .seats
+                            .first()
+                            .and_then(|s| s.input_method.as_ref())
+                        {
+                            use crate::platform_specific::wayland::handlers::input_method::InputMethod;
+                            let serial = im
+                                .data::<InputMethod>()
+                                .map(|d| d.inner.lock().unwrap().serial)
+                                .unwrap_or(0);
+                            im.commit(serial);
+                        }
+                    }
+                    input_method::Action::FilterKey(serial, consumed) => {
+                        if let Some(kf) = self.keyboard_filter.as_ref() {
+                            use wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_v1::FilterAction;
+                            kf.filter(
+                                serial,
+                                if consumed {
+                                    FilterAction::Consume
+                                } else {
+                                    FilterAction::Passthrough
+                                },
+                            );
                         }
                     }
                 }

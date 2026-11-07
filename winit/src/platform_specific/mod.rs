@@ -63,9 +63,6 @@ impl SurfaceIdWrapper {
 pub struct PlatformSpecific {
     #[cfg(wayland_platform)]
     wayland: WaylandSpecific,
-    /// Last size sent to reposition, to avoid redundant calls
-    #[cfg(feature = "wayland_input_method")]
-    pub(crate) im_popup_last_size: Option<(u32, u32)>,
 }
 
 impl PlatformSpecific {
@@ -76,15 +73,6 @@ impl PlatformSpecific {
         match action {
             #[cfg(wayland_platform)]
             iced_runtime::platform_specific::Action::Wayland(a) => {
-                #[cfg(feature = "wayland_input_method")]
-                if matches!(
-                    a,
-                    iced_runtime::platform_specific::wayland::Action::InputMethod(
-                        iced_runtime::platform_specific::wayland::input_method::Action::ResetPopupSize
-                    )
-                ) {
-                    self.im_popup_last_size = None;
-                }
                 self.send_wayland(wayland::Action::Action(a));
             }
         }
@@ -95,8 +83,9 @@ impl PlatformSpecific {
         self.wayland.has_popup(toplevel)
     }
 
-    /// If the given window ID is the IM popup and the size changed,
-    /// sync the compositor positioner to the new content size.
+    /// If the given window ID is the IM popup, sync the compositor positioner
+    /// to the new content size. Zero sizes and no-ops are filtered when
+    /// handling `Action::Size` via `InputMethodPopup::max_size`.
     #[cfg(feature = "wayland_input_method")]
     pub(crate) fn reposition_im_popup_if_resized(
         &mut self,
@@ -104,9 +93,6 @@ impl PlatformSpecific {
         width: u32,
         height: u32,
     ) {
-        if width == 0 || height == 0 {
-            return;
-        }
         #[cfg(wayland_platform)]
         let is_im_popup = self.wayland.surface_ids.values().any(|w| {
             matches!(w, SurfaceIdWrapper::InputMethodPopup(popup_id) if *popup_id == id)
@@ -116,10 +102,6 @@ impl PlatformSpecific {
         if !is_im_popup {
             return;
         }
-        if self.im_popup_last_size == Some((width, height)) {
-            return;
-        }
-        self.im_popup_last_size = Some((width, height));
         use iced_runtime::platform_specific::wayland::{
             self as runtime_wl, input_method as im,
         };

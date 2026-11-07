@@ -118,11 +118,8 @@ impl SeatHandler for SctkState {
                         if let Some(im_manager) =
                             self.input_method_manager.as_ref()
                         {
-                            let im = im_manager.input_method(
-                                &seat,
-                                &self.queue_handle,
-                                self.loop_handle.clone(),
-                            );
+                            let im = im_manager
+                                .input_method(&seat, &self.queue_handle);
 
                             // Create IM-bound keyboard and keyboard filter
                             if let Some(kf_manager) =

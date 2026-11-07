@@ -1847,34 +1847,19 @@ impl SctkEvent {
             }
             #[cfg(feature = "wayland_input_method")]
             SctkEvent::InputMethodKeyboardEvent { variant } => {
-                use iced_runtime::core::event::wayland::input_method::{
-                    InputMethodKeyboardEvent, KeyEvent as ImKeyEvent,
-                    Modifiers as ImModifiers,
-                };
+                use iced_runtime::core::event::wayland::input_method::InputMethodKeyboardEvent;
                 let im_kbd_event = match variant {
                     InputMethodKeyboardEventVariant::Press(
                         key_event,
                         mods,
                         serial,
                     ) => {
-                        let (key, _location) =
+                        let (key, _) =
                             keysym_to_vkey_location(key_event.keysym);
                         InputMethodKeyboardEvent::Press(
-                            ImKeyEvent {
-                                time: key_event.time,
-                                raw_code: key_event.raw_code,
-                                keysym: key_event.keysym.raw(),
-                                utf8: key_event.utf8.clone(),
-                            },
+                            to_im_key_event(&key_event),
                             key,
-                            ImModifiers {
-                                ctrl: mods.ctrl,
-                                alt: mods.alt,
-                                shift: mods.shift,
-                                caps_lock: mods.caps_lock,
-                                logo: mods.logo,
-                                num_lock: mods.num_lock,
-                            },
+                            to_im_modifiers(mods),
                             serial,
                         )
                     }
@@ -1883,24 +1868,12 @@ impl SctkEvent {
                         mods,
                         serial,
                     ) => {
-                        let (key, _location) =
+                        let (key, _) =
                             keysym_to_vkey_location(key_event.keysym);
                         InputMethodKeyboardEvent::Release(
-                            ImKeyEvent {
-                                time: key_event.time,
-                                raw_code: key_event.raw_code,
-                                keysym: key_event.keysym.raw(),
-                                utf8: key_event.utf8.clone(),
-                            },
+                            to_im_key_event(&key_event),
                             key,
-                            ImModifiers {
-                                ctrl: mods.ctrl,
-                                alt: mods.alt,
-                                shift: mods.shift,
-                                caps_lock: mods.caps_lock,
-                                logo: mods.logo,
-                                num_lock: mods.num_lock,
-                            },
+                            to_im_modifiers(mods),
                             serial,
                         )
                     }
@@ -1909,36 +1882,19 @@ impl SctkEvent {
                         mods,
                         serial,
                     ) => {
-                        let (key, _location) =
+                        let (key, _) =
                             keysym_to_vkey_location(key_event.keysym);
                         InputMethodKeyboardEvent::Repeat(
-                            ImKeyEvent {
-                                time: key_event.time,
-                                raw_code: key_event.raw_code,
-                                keysym: key_event.keysym.raw(),
-                                utf8: key_event.utf8.clone(),
-                            },
+                            to_im_key_event(&key_event),
                             key,
-                            ImModifiers {
-                                ctrl: mods.ctrl,
-                                alt: mods.alt,
-                                shift: mods.shift,
-                                caps_lock: mods.caps_lock,
-                                logo: mods.logo,
-                                num_lock: mods.num_lock,
-                            },
+                            to_im_modifiers(mods),
                             serial,
                         )
                     }
                     InputMethodKeyboardEventVariant::Modifiers(mods) => {
-                        InputMethodKeyboardEvent::Modifiers(ImModifiers {
-                            ctrl: mods.ctrl,
-                            alt: mods.alt,
-                            shift: mods.shift,
-                            caps_lock: mods.caps_lock,
-                            logo: mods.logo,
-                            num_lock: mods.num_lock,
-                        })
+                        InputMethodKeyboardEvent::Modifiers(to_im_modifiers(
+                            mods,
+                        ))
                     }
                 };
                 events.push((
@@ -2005,7 +1961,6 @@ impl SctkEvent {
                     );
                     // IM popup doesn't need a11y adapter — mark ready immediately
                     window.state.set_a11y_ready(true);
-                    _ = surface_ids.insert(object_id, wrapper.clone());
                     let logical_size = window.logical_size();
 
                     let ui = crate::build_user_interface(
@@ -2051,6 +2006,32 @@ impl SctkEvent {
                 }
             },
         }
+    }
+}
+
+#[cfg(feature = "wayland_input_method")]
+fn to_im_key_event(
+    key_event: &KeyEvent,
+) -> iced_runtime::core::event::wayland::input_method::KeyEvent {
+    iced_runtime::core::event::wayland::input_method::KeyEvent {
+        time: key_event.time,
+        raw_code: key_event.raw_code,
+        keysym: key_event.keysym.raw(),
+        utf8: key_event.utf8.clone(),
+    }
+}
+
+#[cfg(feature = "wayland_input_method")]
+fn to_im_modifiers(
+    mods: Modifiers,
+) -> iced_runtime::core::event::wayland::input_method::Modifiers {
+    iced_runtime::core::event::wayland::input_method::Modifiers {
+        ctrl: mods.ctrl,
+        alt: mods.alt,
+        shift: mods.shift,
+        caps_lock: mods.caps_lock,
+        logo: mods.logo,
+        num_lock: mods.num_lock,
     }
 }
 
