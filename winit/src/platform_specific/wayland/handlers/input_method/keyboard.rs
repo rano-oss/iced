@@ -1,21 +1,11 @@
-use std::{
-    env,
-    fmt::Debug,
-    num::NonZeroU32,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{env, fmt::Debug, sync::Mutex};
 
-use cctk::sctk::reexports::calloop::{
-    LoopHandle, RegistrationToken,
-    timer::{TimeoutAction, Timer},
-};
 use cctk::sctk::{
     reexports::client::{
         Connection, Dispatch, Proxy, QueueHandle, WEnum,
         protocol::wl_keyboard::{self, WlKeyboard},
     },
-    seat::keyboard::{KeyEvent, Modifiers, RepeatInfo},
+    seat::keyboard::{KeyEvent, Modifiers},
 };
 
 use xkbcommon::xkb;
@@ -30,35 +20,10 @@ use crate::platform_specific::wayland::sctk_event::{
     InputMethodKeyboardEventVariant, SctkEvent,
 };
 
-pub(crate) struct RepeatedKey {
-    pub(crate) key: KeyEvent,
-    pub(crate) is_first: bool,
-}
-
-pub type RepeatCallback =
-    Box<dyn FnMut(&mut SctkState, &WlKeyboard, KeyEvent) + 'static>;
-
-pub(crate) struct RepeatData {
-    pub(crate) current_repeat: Option<RepeatedKey>,
-    pub(crate) repeat_info: RepeatInfo,
-    pub(crate) loop_handle: LoopHandle<'static, SctkState>,
-    pub(crate) callback: RepeatCallback,
-    pub(crate) repeat_token: Option<RegistrationToken>,
-}
-
-impl Drop for RepeatData {
-    fn drop(&mut self) {
-        if let Some(token) = self.repeat_token.take() {
-            self.loop_handle.remove(token);
-        }
-    }
-}
-
 pub struct InputMethodKeyboardData {
     xkb_context: Mutex<xkb::Context>,
     xkb_state: Mutex<Option<xkb::State>>,
     xkb_compose: Mutex<Option<xkb::compose::State>>,
-    pub(crate) repeat_data: Arc<Mutex<Option<RepeatData>>>,
 }
 
 impl Debug for InputMethodKeyboardData {
@@ -74,10 +39,7 @@ unsafe impl Send for InputMethodKeyboardData {}
 unsafe impl Sync for InputMethodKeyboardData {}
 
 impl InputMethodKeyboardData {
-    pub fn new(
-        loop_handle: LoopHandle<'static, SctkState>,
-        callback: RepeatCallback,
-    ) -> Self {
+    pub fn new() -> Self {
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
 
         let xkb_compose = if let Some(locale) = env::var_os("LC_ALL")
@@ -94,11 +56,10 @@ impl InputMethodKeyboardData {
                 locale.as_ref(),
                 xkb::compose::COMPILE_NO_FLAGS,
             ) {
-                let compose_state = xkb::compose::State::new(
+                Some(xkb::compose::State::new(
                     &table,
                     xkb::compose::COMPILE_NO_FLAGS,
-                );
-                Some(compose_state)
+                ))
             } else {
                 None
             }
@@ -106,17 +67,10 @@ impl InputMethodKeyboardData {
             None
         };
 
-        InputMethodKeyboardData {
+        Self {
             xkb_context: Mutex::new(xkb_context),
             xkb_state: Mutex::new(None),
             xkb_compose: Mutex::new(xkb_compose),
-            repeat_data: Arc::new(Mutex::new(Some(RepeatData {
-                current_repeat: None,
-                repeat_info: RepeatInfo::Disable,
-                loop_handle: loop_handle.clone(),
-                callback,
-                repeat_token: None,
-            }))),
         }
     }
 
@@ -178,10 +132,53 @@ impl InputMethodKeyboardData {
             None => Some(xkb_state.key_get_utf8((raw_code + 8).into())),
         }
     }
+
+    fn push_key(
+        &self,
+        state: &mut SctkState,
+        serial: u32,
+        time: u32,
+        key: u32,
+        key_state: wl_keyboard::KeyState,
+    ) {
+        let state_guard = self.xkb_state.lock().unwrap();
+        let Some(guard) = state_guard.as_ref() else {
+            return;
+        };
+        let keysym = guard.key_get_one_sym((key + 8).into());
+        let utf8 = match key_state {
+            wl_keyboard::KeyState::Pressed => {
+                self.utf8_for_keysym(guard, keysym, key, true)
+            }
+            wl_keyboard::KeyState::Repeated => {
+                self.utf8_for_keysym(guard, keysym, key, false)
+            }
+            _ => None,
+        };
+        let event = KeyEvent {
+            time,
+            raw_code: key,
+            keysym: keysym.into(),
+            utf8,
+        };
+        let mods = self.update_modifiers();
+        let variant = match key_state {
+            wl_keyboard::KeyState::Released => {
+                InputMethodKeyboardEventVariant::Release(event, mods, serial)
+            }
+            wl_keyboard::KeyState::Pressed => {
+                InputMethodKeyboardEventVariant::Press(event, mods, serial)
+            }
+            // Compositor-owned repeat (wl_keyboard v10+ / keyboard-filter).
+            // Real serial required so the IME can filter after preedit ends.
+            _ => InputMethodKeyboardEventVariant::Repeat(event, mods, serial),
+        };
+        state
+            .sctk_events
+            .push(SctkEvent::InputMethodKeyboardEvent { variant });
+    }
 }
 
-// Dispatch for WlKeyboard with InputMethodKeyboardData
-// This handles keyboard events for the IM-bound keyboard
 impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
     fn event(
         state: &mut SctkState,
@@ -200,7 +197,6 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                     }
                     wl_keyboard::KeymapFormat::XkbV1 => {
                         let context = udata.xkb_context.lock().unwrap();
-
                         #[allow(unused_unsafe)]
                         match unsafe {
                             xkb::Keymap::new_from_fd(
@@ -212,9 +208,8 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                             )
                         } {
                             Ok(Some(keymap)) => {
-                                let xkb_state = xkb::State::new(&keymap);
                                 *udata.xkb_state.lock().unwrap() =
-                                    Some(xkb_state);
+                                    Some(xkb::State::new(&keymap));
                             }
                             Ok(None) => {
                                 log::error!(target: "sctk", "invalid keymap");
@@ -240,186 +235,7 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                 state: key_state,
             } => match key_state {
                 WEnum::Value(key_state) => {
-                    let state_guard = udata.xkb_state.lock().unwrap();
-
-                    if let Some(guard) = state_guard.as_ref() {
-                        let keysym = guard.key_get_one_sym((key + 8).into());
-                        let utf8 =
-                            match key_state {
-                                wl_keyboard::KeyState::Pressed => udata
-                                    .utf8_for_keysym(guard, keysym, key, true),
-                                wl_keyboard::KeyState::Repeated => udata
-                                    .utf8_for_keysym(guard, keysym, key, false),
-                                _ => None,
-                            };
-
-                        drop(state_guard);
-
-                        let event = KeyEvent {
-                            time,
-                            raw_code: key,
-                            keysym: keysym.into(),
-                            utf8,
-                        };
-
-                        match key_state {
-                            wl_keyboard::KeyState::Released => {
-                                if let Some(repeat_data) =
-                                    udata.repeat_data.lock().unwrap().as_mut()
-                                {
-                                    if Some(event.raw_code)
-                                        == repeat_data
-                                            .current_repeat
-                                            .as_ref()
-                                            .map(|r| r.key.raw_code)
-                                    {
-                                        repeat_data.current_repeat = None;
-                                        if let Some(token) =
-                                            repeat_data.repeat_token.take()
-                                        {
-                                            repeat_data
-                                                .loop_handle
-                                                .remove(token);
-                                        }
-                                    }
-                                }
-                                state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
-                                    variant: InputMethodKeyboardEventVariant::Release(
-                                        event,
-                                        udata.update_modifiers(),
-                                        serial,
-                                    ),
-                                });
-                            }
-                            wl_keyboard::KeyState::Repeated => {
-                                // Compositor-owned repeat (wl_keyboard v10+).
-                                // Must carry a real serial so the IME can
-                                // filter/passthrough after preedit clears.
-                                state
-                                    .sctk_events
-                                    .push(SctkEvent::InputMethodKeyboardEvent {
-                                    variant:
-                                        InputMethodKeyboardEventVariant::Repeat(
-                                            event,
-                                            udata.update_modifiers(),
-                                            serial,
-                                        ),
-                                });
-                            }
-                            wl_keyboard::KeyState::Pressed => {
-                                // Push the press event first, before repeat setup
-                                state
-                                    .sctk_events
-                                    .push(SctkEvent::InputMethodKeyboardEvent {
-                                    variant:
-                                        InputMethodKeyboardEventVariant::Press(
-                                            event.clone(),
-                                            udata.update_modifiers(),
-                                            serial,
-                                        ),
-                                });
-
-                                // With keyboard-filter, the compositor owns key
-                                // repeat (wl_keyboard Repeated / press+release).
-                                // Client-side synthetic repeats use serial 0 and
-                                // cannot be passthrough'd after preedit ends.
-                                if state.keyboard_filter.is_some() {
-                                    return;
-                                }
-
-                                if let Some(repeat_data) =
-                                    udata.repeat_data.lock().unwrap().as_mut()
-                                {
-                                    let loop_handle =
-                                        &mut repeat_data.loop_handle;
-                                    let state_guard =
-                                        udata.xkb_state.lock().unwrap();
-                                    let key_repeats = state_guard
-                                        .as_ref()
-                                        .map(|guard| {
-                                            guard.get_keymap().key_repeats(
-                                                (event.raw_code + 8).into(),
-                                            )
-                                        })
-                                        .unwrap_or_default();
-                                    if key_repeats {
-                                        if let Some(token) =
-                                            repeat_data.repeat_token.take()
-                                        {
-                                            loop_handle.remove(token);
-                                        }
-
-                                        let _ = repeat_data
-                                            .current_repeat
-                                            .replace(RepeatedKey {
-                                                key: event.clone(),
-                                                is_first: true,
-                                            });
-
-                                        let (delay, rate) =
-                                            match repeat_data.repeat_info {
-                                                RepeatInfo::Disable => return,
-                                                RepeatInfo::Repeat {
-                                                    delay,
-                                                    rate,
-                                                } => (delay, rate),
-                                            };
-                                        let gap = Duration::from_micros(
-                                            1_000_000 / rate.get() as u64,
-                                        );
-                                        let timer = Timer::from_duration(
-                                            Duration::from_millis(delay as u64),
-                                        );
-                                        let repeat_data2 =
-                                            udata.repeat_data.clone();
-
-                                        let kbd = keyboard.clone();
-                                        if let Ok(token) = loop_handle.insert_source(
-                                            timer,
-                                            move |_, _, loop_state| {
-                                                let mut repeat_data =
-                                                    repeat_data2.lock().unwrap();
-                                                let repeat_data = match repeat_data.as_mut() {
-                                                    Some(repeat_data) => repeat_data,
-                                                    None => return TimeoutAction::Drop,
-                                                };
-
-                                                let callback = &mut repeat_data.callback;
-                                                let key = &mut repeat_data.current_repeat;
-                                                if key.is_none() {
-                                                    return TimeoutAction::Drop;
-                                                }
-                                                let key = key.as_mut().unwrap();
-                                                key.key.time += if key.is_first {
-                                                    key.is_first = false;
-                                                    delay
-                                                } else {
-                                                    gap.as_millis() as u32
-                                                };
-                                                callback(loop_state, &kbd, key.key.clone());
-                                                TimeoutAction::ToDuration(gap)
-                                            },
-                                        ) {
-                                            repeat_data.repeat_token = Some(token);
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                // Handle server-side key repeat
-                                state
-                                    .sctk_events
-                                    .push(SctkEvent::InputMethodKeyboardEvent {
-                                    variant:
-                                        InputMethodKeyboardEventVariant::Repeat(
-                                            event,
-                                            udata.update_modifiers(),
-                                            serial,
-                                        ),
-                                });
-                            }
-                        }
-                    };
+                    udata.push_key(state, serial, time, key, key_state);
                 }
                 WEnum::Unknown(unknown) => {
                     log::warn!(target: "sctk", "{}: compositor sends invalid key state: {:x}", keyboard.id(), unknown);
@@ -434,12 +250,9 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                 group,
             } => {
                 let mut guard = udata.xkb_state.lock().unwrap();
-
-                let xkb_state = match guard.as_mut() {
-                    Some(state) => state,
-                    None => return,
+                let Some(xkb_state) = guard.as_mut() else {
+                    return;
                 };
-
                 let _ = xkb_state.update_mask(
                     mods_depressed,
                     mods_latched,
@@ -448,53 +261,19 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                     0,
                     group,
                 );
-
-                // Update the currently repeating key if any.
-                if let Some(repeat_data) =
-                    udata.repeat_data.lock().unwrap().as_mut()
-                {
-                    if let Some(mut event) = repeat_data.current_repeat.take() {
-                        event.key.utf8 = udata.utf8_for_keysym(
-                            xkb_state,
-                            event.key.keysym.into(),
-                            event.key.raw_code,
-                            true,
-                        );
-                        repeat_data.current_repeat = Some(event);
-                    }
-                }
-
                 drop(guard);
 
-                let modifiers = udata.update_modifiers();
                 state.sctk_events.push(SctkEvent::InputMethodKeyboardEvent {
                     variant: InputMethodKeyboardEventVariant::Modifiers(
-                        modifiers,
+                        udata.update_modifiers(),
                     ),
                 });
             }
 
-            wl_keyboard::Event::RepeatInfo { rate, delay } => {
-                let info = if rate != 0 {
-                    RepeatInfo::Repeat {
-                        rate: NonZeroU32::new(rate as u32).unwrap(),
-                        delay: delay as u32,
-                    }
-                } else {
-                    RepeatInfo::Disable
-                };
-
-                if let Some(repeat_data) =
-                    udata.repeat_data.lock().unwrap().as_mut()
-                {
-                    repeat_data.repeat_info = info;
-                }
-            }
-
-            wl_keyboard::Event::Enter { .. }
-            | wl_keyboard::Event::Leave { .. } => {
-                // Ignored for IM keyboard — interceptor handles enter/leave semantics
-            }
+            // Repeat rate is compositor-owned when keyboard-filter is bound.
+            wl_keyboard::Event::RepeatInfo { .. }
+            | wl_keyboard::Event::Enter { .. }
+            | wl_keyboard::Event::Leave { .. } => {}
 
             _ => {
                 log::warn!(target: "sctk", "unhandled input method keyboard event");
@@ -503,7 +282,6 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
     }
 }
 
-// Dispatch for XxKeyboardFilterManagerV1
 impl Dispatch<XxKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
     for SctkState
 {
@@ -515,11 +293,9 @@ impl Dispatch<XxKeyboardFilterManagerV1, cctk::sctk::globals::GlobalData>
         _: &Connection,
         _: &QueueHandle<SctkState>,
     ) {
-        // No events for the manager
     }
 }
 
-// Dispatch for XxKeyboardFilterV1
 impl Dispatch<XxKeyboardFilterV1, ()> for SctkState {
     fn event(
         _state: &mut SctkState,
@@ -529,6 +305,5 @@ impl Dispatch<XxKeyboardFilterV1, ()> for SctkState {
         _: &Connection,
         _: &QueueHandle<SctkState>,
     ) {
-        // No events for keyboard_filter (it's all requests)
     }
 }

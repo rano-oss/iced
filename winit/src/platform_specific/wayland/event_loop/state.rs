@@ -1914,7 +1914,6 @@ impl SctkState {
                         self.input_method_popup_settings = Some(settings);
                     }
                     input_method::Action::Size {
-                        id: _,
                         width,
                         height,
                         positioner: pos,

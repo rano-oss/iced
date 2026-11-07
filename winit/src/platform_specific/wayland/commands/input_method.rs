@@ -6,7 +6,6 @@ use iced_runtime::{
     task,
 };
 
-use crate::core::window::Id as SurfaceId;
 pub use wayland::input_method::InputMethodPopupSettings;
 pub use wayland::input_method::{
     Anchor, ConstraintAdjustment, Gravity, PopupPositionMode, PopupPositioner,
@@ -56,12 +55,8 @@ pub fn get_input_method_popup<Message>(
 }
 
 /// Set size of the input method popup with default positioner settings.
-pub fn set_size<Message>(
-    id: SurfaceId,
-    width: u32,
-    height: u32,
-) -> Task<Message> {
-    set_size_with_positioner(id, width, height, PopupPositioner::default())
+pub fn set_size<Message>(width: u32, height: u32) -> Task<Message> {
+    set_size_with_positioner(width, height, PopupPositioner::default())
 }
 
 /// Set size of the input method popup with custom positioner settings.
@@ -69,13 +64,11 @@ pub fn set_size<Message>(
 /// Use the re-exported `Anchor`, `Gravity`, and `ConstraintAdjustment` types
 /// from this module to configure positioning behavior.
 pub fn set_size_with_positioner<Message>(
-    id: SurfaceId,
     width: u32,
     height: u32,
     positioner: PopupPositioner,
 ) -> Task<Message> {
     im_task(wayland::input_method::Action::Size {
-        id,
         width,
         height,
         positioner,

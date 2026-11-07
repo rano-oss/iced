@@ -1859,7 +1859,7 @@ impl SctkEvent {
                         InputMethodKeyboardEvent::Press(
                             to_im_key_event(&key_event),
                             key,
-                            to_im_modifiers(mods),
+                            modifiers_to_native(mods),
                             serial,
                         )
                     }
@@ -1873,7 +1873,7 @@ impl SctkEvent {
                         InputMethodKeyboardEvent::Release(
                             to_im_key_event(&key_event),
                             key,
-                            to_im_modifiers(mods),
+                            modifiers_to_native(mods),
                             serial,
                         )
                     }
@@ -1887,14 +1887,14 @@ impl SctkEvent {
                         InputMethodKeyboardEvent::Repeat(
                             to_im_key_event(&key_event),
                             key,
-                            to_im_modifiers(mods),
+                            modifiers_to_native(mods),
                             serial,
                         )
                     }
                     InputMethodKeyboardEventVariant::Modifiers(mods) => {
-                        InputMethodKeyboardEvent::Modifiers(to_im_modifiers(
-                            mods,
-                        ))
+                        InputMethodKeyboardEvent::Modifiers(
+                            modifiers_to_native(mods),
+                        )
                     }
                 };
                 events.push((
@@ -2018,20 +2018,6 @@ fn to_im_key_event(
         raw_code: key_event.raw_code,
         keysym: key_event.keysym.raw(),
         utf8: key_event.utf8.clone(),
-    }
-}
-
-#[cfg(feature = "wayland_input_method")]
-fn to_im_modifiers(
-    mods: Modifiers,
-) -> iced_runtime::core::event::wayland::input_method::Modifiers {
-    iced_runtime::core::event::wayland::input_method::Modifiers {
-        ctrl: mods.ctrl,
-        alt: mods.alt,
-        shift: mods.shift,
-        caps_lock: mods.caps_lock,
-        logo: mods.logo,
-        num_lock: mods.num_lock,
     }
 }
 

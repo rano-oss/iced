@@ -79,8 +79,6 @@ pub enum Action {
     },
     /// Reposition the popup with new size and positioner settings
     Size {
-        /// id of the popup
-        id: Id,
         /// width
         width: u32,
         /// height
@@ -124,13 +122,11 @@ impl fmt::Debug for Action {
                 f.debug_tuple("Popup").field(settings).finish()
             }
             Self::Size {
-                id,
                 width,
                 height,
                 positioner,
             } => f
                 .debug_struct("Size")
-                .field("id", id)
                 .field("width", width)
                 .field("height", height)
                 .field("positioner", positioner)

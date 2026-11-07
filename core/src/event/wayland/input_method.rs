@@ -1,5 +1,8 @@
 use crate::keyboard::Key;
 
+/// Keyboard modifiers for IM key events (same bitflags as [`crate::keyboard::Modifiers`]).
+pub use crate::keyboard::Modifiers;
+
 /// input method events
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMethodEvent {
@@ -68,21 +71,4 @@ pub struct KeyEvent {
     ///
     /// This will always be [`None`] on release events.
     pub utf8: Option<String>,
-}
-
-/// The state of keyboard modifiers
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Modifiers {
-    /// The "control" key
-    pub ctrl: bool,
-    /// The "alt" key
-    pub alt: bool,
-    /// The "shift" key
-    pub shift: bool,
-    /// The "Caps lock" key
-    pub caps_lock: bool,
-    /// The "logo" key
-    pub logo: bool,
-    /// The "Num lock" key
-    pub num_lock: bool,
 }

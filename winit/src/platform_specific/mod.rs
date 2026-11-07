@@ -107,7 +107,6 @@ impl PlatformSpecific {
         };
         self.send_action(iced_runtime::platform_specific::Action::Wayland(
             runtime_wl::Action::InputMethod(im::Action::Size {
-                id,
                 width,
                 height,
                 positioner: im::PopupPositioner::default(),
