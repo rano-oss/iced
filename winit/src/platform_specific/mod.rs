@@ -86,19 +86,16 @@ impl PlatformSpecific {
     /// If the given window ID is the IM popup, sync the compositor positioner
     /// to the new content size. Zero sizes and no-ops are filtered when
     /// handling `Action::Size` via `InputMethodPopup::max_size`.
-    #[cfg(feature = "wayland_input_method")]
+    #[cfg(all(feature = "wayland_input_method", wayland_platform))]
     pub(crate) fn reposition_im_popup_if_resized(
         &mut self,
         id: window::Id,
         width: u32,
         height: u32,
     ) {
-        #[cfg(wayland_platform)]
         let is_im_popup = self.wayland.surface_ids.values().any(|w| {
             matches!(w, SurfaceIdWrapper::InputMethodPopup(popup_id) if *popup_id == id)
         });
-        #[cfg(not(wayland_platform))]
-        let is_im_popup = false;
         if !is_im_popup {
             return;
         }

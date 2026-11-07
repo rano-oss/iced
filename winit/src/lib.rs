@@ -1472,7 +1472,10 @@ async fn run_instance<P>(
                                 );
 
                                 // Sync xx-IM positioner when candidate layout size changes
-                                #[cfg(feature = "wayland_input_method")]
+                                #[cfg(all(
+                                    feature = "wayland_input_method",
+                                    wayland_platform
+                                ))]
                                 platform_specific_handler
                                     .reposition_im_popup_if_resized(
                                         id,

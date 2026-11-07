@@ -560,37 +560,29 @@ impl SctkEventLoop {
                         }
                     }
 
-                    #[cfg(feature = "wayland_input_method")]
-                    let im_popup_surface = state
+                    let mut frame_surfaces: Vec<_> = state
                         .state
-                        .input_method_popup
-                        .as_ref()
-                        .map(|p| &p.wl_surface);
-                    #[cfg(not(feature = "wayland_input_method"))]
-                    let im_popup_surface: Option<
-                        &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,
-                    > = None;
-
-                    for s in
-                        state
-                            .state
-                            .layer_surfaces
-                            .iter()
-                            .map(|s| s.surface.wl_surface())
-                            .chain(
-                                state
-                                    .state
-                                    .popmgr
-                                    .popups()
-                                    .map(|s| s.popup.wl_surface()),
-                            )
-                            .chain(
-                                state.state.lock_surfaces.iter().map(|s| {
-                                    s.session_lock_surface.wl_surface()
-                                }),
-                            )
-                            .chain(im_popup_surface)
+                        .layer_surfaces
+                        .iter()
+                        .map(|s| s.surface.wl_surface())
+                        .chain(
+                            state
+                                .state
+                                .popmgr
+                                .popups()
+                                .map(|s| s.popup.wl_surface()),
+                        )
+                        .chain(state.state.lock_surfaces.iter().map(|s| {
+                            s.session_lock_surface.wl_surface()
+                        }))
+                        .collect();
+                    #[cfg(feature = "wayland_input_method")]
+                    if let Some(popup) = state.state.input_method_popup.as_ref()
                     {
+                        frame_surfaces.push(&popup.wl_surface);
+                    }
+
+                    for s in frame_surfaces {
                         let id = s.id();
                         if state
                             .state
