@@ -296,8 +296,6 @@ impl Dispatch<XxInputPopupSurfaceV2, InputMethodPopup> for SctkState {
         match event {
             xx_input_popup_surface_v2::Event::StartConfigure {
                 serial,
-                width,
-                height,
                 ..
             } => {
                 let wl_surface = &data.wl_surface;
@@ -312,10 +310,7 @@ impl Dispatch<XxInputPopupSurfaceV2, InputMethodPopup> for SctkState {
                     &state.events_sender,
                     &state.proxy,
                     SctkEvent::InputMethodPopupEvent {
-                        variant: InputMethodPopupEventVariant::Configure {
-                            width: width as i32,
-                            height: height as i32,
-                        },
+                        variant: InputMethodPopupEventVariant::Configure,
                         id: wl_surface.clone(),
                     },
                 );

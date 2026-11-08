@@ -1436,8 +1436,7 @@ async fn run_instance<P>(
                             );
 
                         let physical_size = window.state.physical_size();
-                        // Skip 0×0 autosize (hidden content) — same idea as
-                        // subsurface size requests — and no-op same-size.
+                        // Skip 0×0 autosize (hidden content) and same-size.
                         if requested_size.width > 0.0
                             && requested_size.height > 0.0
                             && (requested_physical_size.width

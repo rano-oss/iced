@@ -354,8 +354,8 @@ pub enum InputMethodPopupEventVariant {
         Arc<Mutex<Common>>,
         WlDisplay,
     ),
-    /// Configure event with position/size from compositor
-    Configure { width: i32, height: i32 },
+    /// Configure acked; surface size follows content layout.
+    Configure,
     /// Done / closed
     Done,
 }
@@ -910,13 +910,11 @@ impl SctkEvent {
                                 .ceil() as u32,
                             );
                         let physical_size = window.state.physical_size();
-                        if requested_size.width > 0.0
-                            && requested_size.height > 0.0
-                            && (requested_physical_size.width
-                                != physical_size.width
-                                || requested_physical_size.height
-                                    != physical_size.height)
-                        {
+                        if logical_size_request_changed(
+                            requested_size,
+                            requested_physical_size,
+                            physical_size,
+                        ) {
                             // FIXME what to do when we are stuck in a configure event/resize request loop
                             // We don't have control over how winit handles this.
                             window.resize_enabled = true;
@@ -1126,13 +1124,11 @@ impl SctkEvent {
                                         as u32,
                                 );
                             let physical_size = window.state.physical_size();
-                            if requested_size.width > 0.0
-                                && requested_size.height > 0.0
-                                && (requested_physical_size.width
-                                    != physical_size.width
-                                    || requested_physical_size.height
-                                        != physical_size.height)
-                            {
+                            if logical_size_request_changed(
+                                requested_size,
+                                requested_physical_size,
+                                physical_size,
+                            ) {
                                 // FIXME what to do when we are stuck in a configure event/resize request loop
                                 // We don't have control over how winit handles this.
                                 window.resize_enabled = true;
@@ -1375,13 +1371,11 @@ impl SctkEvent {
                         .ceil() as u32,
                     );
                     let physical_size = window.state.physical_size();
-                    if requested_size.width > 0.0
-                        && requested_size.height > 0.0
-                        && (requested_physical_size.width
-                            != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height)
-                    {
+                    if logical_size_request_changed(
+                        requested_size,
+                        requested_physical_size,
+                        physical_size,
+                    ) {
                         // FIXME what to do when we are stuck in a configure event/resize request loop
                         // We don't have control over how winit handles this.
                         window.resize_enabled = true;
@@ -1707,13 +1701,11 @@ impl SctkEvent {
                                 .ceil() as u32,
                             );
                         let physical_size = window.state.physical_size();
-                        if requested_size.width > 0.0
-                            && requested_size.height > 0.0
-                            && (requested_physical_size.width
-                                != physical_size.width
-                                || requested_physical_size.height
-                                    != physical_size.height)
-                        {
+                        if logical_size_request_changed(
+                            requested_size,
+                            requested_physical_size,
+                            physical_size,
+                        ) {
                             // FIXME what to do when we are stuck in a configure event/resize request loop
                             // We don't have control over how winit handles this.
                             window.resize_enabled = true;
@@ -1841,27 +1833,19 @@ impl SctkEvent {
                         mods,
                         serial,
                     ) => {
-                        let (key, _) =
-                            keysym_to_vkey_location(key_event.keysym);
-                        InputMethodKeyboardEvent::Press(
-                            to_im_key_event(&key_event),
-                            key,
-                            modifiers_to_native(mods),
-                            serial,
-                        )
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, mods, serial);
+                        InputMethodKeyboardEvent::Press(ke, key, mods, serial)
                     }
                     InputMethodKeyboardEventVariant::Release(
                         key_event,
                         mods,
                         serial,
                     ) => {
-                        let (key, _) =
-                            keysym_to_vkey_location(key_event.keysym);
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, mods, serial);
                         InputMethodKeyboardEvent::Release(
-                            to_im_key_event(&key_event),
-                            key,
-                            modifiers_to_native(mods),
-                            serial,
+                            ke, key, mods, serial,
                         )
                     }
                     InputMethodKeyboardEventVariant::Repeat(
@@ -1869,14 +1853,9 @@ impl SctkEvent {
                         mods,
                         serial,
                     ) => {
-                        let (key, _) =
-                            keysym_to_vkey_location(key_event.keysym);
-                        InputMethodKeyboardEvent::Repeat(
-                            to_im_key_event(&key_event),
-                            key,
-                            modifiers_to_native(mods),
-                            serial,
-                        )
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, mods, serial);
+                        InputMethodKeyboardEvent::Repeat(ke, key, mods, serial)
                     }
                     InputMethodKeyboardEventVariant::Modifiers(mods) => {
                         InputMethodKeyboardEvent::Modifiers(
@@ -1964,14 +1943,10 @@ impl SctkEvent {
                     let _ = user_interfaces.insert(surface_id, ui);
                     window.raw.request_redraw();
                 }
-                InputMethodPopupEventVariant::Configure { width, height } => {
+                InputMethodPopupEventVariant::Configure => {
                     // Ack already happened in the Wayland dispatch handler.
-                    // Do NOT force the winit surface to configure W×H — that size
-                    // comes from the positioner (often the default 256×256) and
-                    // fighting layout-driven content size causes visible blink.
-                    // Content size is synced to the positioner via
-                    // reposition_im_popup_if_resized when layout changes.
-                    let _ = (width, height);
+                    // Surface size follows content layout (via
+                    // reposition_im_popup_if_resized), not configure W×H.
                     if let Some(id) = surface_ids.get(&surface.id()) {
                         if let Some(window) = window_manager.get_mut(id.inner())
                         {
@@ -1989,6 +1964,7 @@ impl SctkEvent {
                                 *clipboard = Clipboard::unconnected();
                             }
                         }
+                        _ = user_interfaces.remove(&id.inner());
                     }
                 }
             },
@@ -2006,6 +1982,37 @@ fn to_im_key_event(
         keysym: key_event.keysym.raw(),
         utf8: key_event.utf8.clone(),
     }
+}
+
+#[cfg(feature = "wayland_input_method")]
+fn to_im_key_parts(
+    key_event: KeyEvent,
+    mods: Modifiers,
+    serial: u32,
+) -> (
+    iced_runtime::core::event::wayland::input_method::KeyEvent,
+    Key,
+    iced_runtime::core::keyboard::Modifiers,
+    u32,
+) {
+    let (key, _) = keysym_to_vkey_location(key_event.keysym);
+    (
+        to_im_key_event(&key_event),
+        key,
+        modifiers_to_native(mods),
+        serial,
+    )
+}
+
+fn logical_size_request_changed(
+    requested: winit::dpi::LogicalSize<f32>,
+    requested_physical: winit::dpi::PhysicalSize<u32>,
+    physical: Size<u32>,
+) -> bool {
+    requested.width > 0.0
+        && requested.height > 0.0
+        && (requested_physical.width != physical.width
+            || requested_physical.height != physical.height)
 }
 
 fn keysym_to_vkey_location(keysym: Keysym) -> (Key, Location) {

@@ -539,50 +539,54 @@ impl SctkEventLoop {
                     let had_events = !state.state.sctk_events.is_empty();
                     let mut wake_up = had_events;
 
-                    #[cfg(feature = "wayland_input_method")]
-                    {
-                        let need_popup_redraw =
-                            state.state.sctk_events.iter().any(|e| {
-                                matches!(
-                                    e,
-                                    SctkEvent::InputMethodKeyboardEvent { .. }
-                                )
-                            }) && state.state.input_method_popup.is_some();
-                        if need_popup_redraw {
-                            let s = state
+                    for e in state.state.sctk_events.drain(..) {
+                        if let SctkEvent::Winit(id, e) = e {
+                            _ = state
                                 .state
-                                .input_method_popup
-                                .as_ref()
-                                .unwrap()
-                                .wl_surface
-                                .clone();
-                            state.state.request_redraw(&s);
+                                .events_sender
+                                .unbounded_send(Control::Winit(id, e));
+                        } else {
+                            _ =
+                                state
+                                    .state
+                                    .events_sender
+                                    .unbounded_send(Control::PlatformSpecific(
+                                    crate::platform_specific::Event::Wayland(e),
+                                ));
                         }
                     }
 
-                    let mut frame_surfaces: Vec<_> = state
-                        .state
-                        .layer_surfaces
-                        .iter()
-                        .map(|s| s.surface.wl_surface())
-                        .chain(
-                            state
-                                .state
-                                .popmgr
-                                .popups()
-                                .map(|s| s.popup.wl_surface()),
-                        )
-                        .chain(state.state.lock_surfaces.iter().map(|s| {
-                            s.session_lock_surface.wl_surface()
-                        }))
-                        .collect();
                     #[cfg(feature = "wayland_input_method")]
-                    if let Some(popup) = state.state.input_method_popup.as_ref()
-                    {
-                        frame_surfaces.push(&popup.wl_surface);
-                    }
+                    let im_popup = state
+                        .state
+                        .input_method_popup
+                        .as_ref()
+                        .map(|p| &p.wl_surface);
+                    #[cfg(not(feature = "wayland_input_method"))]
+                    let im_popup = None::<
+                        &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                    >;
 
-                    for s in frame_surfaces {
+                    for s in
+                        state
+                            .state
+                            .layer_surfaces
+                            .iter()
+                            .map(|s| s.surface.wl_surface())
+                            .chain(
+                                state
+                                    .state
+                                    .popmgr
+                                    .popups()
+                                    .map(|s| s.popup.wl_surface()),
+                            )
+                            .chain(
+                                state.state.lock_surfaces.iter().map(|s| {
+                                    s.session_lock_surface.wl_surface()
+                                }),
+                            )
+                            .chain(im_popup)
+                    {
                         let id = s.id();
                         if state
                             .state
@@ -608,24 +612,6 @@ impl SctkEventLoop {
                         );
                     }
 
-                    // After frames so IM keyboard events can request a popup
-                    // redraw before leaving the queue.
-                    for e in state.state.sctk_events.drain(..) {
-                        if let SctkEvent::Winit(id, e) = e {
-                            _ = state
-                                .state
-                                .events_sender
-                                .unbounded_send(Control::Winit(id, e));
-                        } else {
-                            _ =
-                                state
-                                    .state
-                                    .events_sender
-                                    .unbounded_send(Control::PlatformSpecific(
-                                    crate::platform_specific::Event::Wayland(e),
-                                ));
-                        }
-                    }
                     if wake_up {
                         state.state.proxy.wake_up();
                     }

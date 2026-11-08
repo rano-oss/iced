@@ -127,9 +127,7 @@ impl SeatHandler for SctkState {
                             {
                                 use crate::platform_specific::wayland::handlers::input_method::keyboard::InputMethodKeyboardData;
 
-                                // Create a wl_keyboard with our custom data for IM key events
-                                // Soft-repeat is compositor-owned via keyboard-filter;
-                                // no client-side repeat callback.
+                                // IM-bound wl_keyboard (filter owns repeat).
                                 let im_kbd = seat.get_keyboard(
                                     &self.queue_handle,
                                     InputMethodKeyboardData::new(),

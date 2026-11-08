@@ -184,6 +184,12 @@ impl InputMethodKeyboardData {
         state
             .sctk_events
             .push(SctkEvent::InputMethodKeyboardEvent { variant });
+        // Mark the candidate popup for the upcoming frame pass (same path as
+        // seat keyboard → request_redraw during dispatch).
+        if let Some(popup) = state.input_method_popup.as_ref() {
+            let surface = popup.wl_surface.clone();
+            state.request_redraw(&surface);
+        }
     }
 }
 
