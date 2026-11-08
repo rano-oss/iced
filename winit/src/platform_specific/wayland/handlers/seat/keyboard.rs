@@ -13,15 +13,9 @@ use cctk::sctk::{
 };
 
 #[cfg(feature = "wayland_input_method")]
-use crate::platform_specific::wayland::sctk_event::InputMethodKeyboardEventVariant;
-
-#[cfg(feature = "wayland_input_method")]
 impl SctkState {
     /// Filter-bound seat keyboard → IM key events (serial required for FilterKey).
-    fn push_im_keyboard(
-        &mut self,
-        variant: InputMethodKeyboardEventVariant,
-    ) {
+    fn push_im_keyboard(&mut self, variant: KeyboardEventVariant) {
         self.sctk_events
             .push(SctkEvent::InputMethodKeyboardEvent { variant });
         if let Some(popup) = self.input_method_popup.as_ref() {
@@ -94,9 +88,7 @@ impl KeyboardHandler for SctkState {
             let modifiers =
                 modifiers_from_keysyms(keysyms, my_seat._modifiers);
             my_seat._modifiers = modifiers;
-            self.push_im_keyboard(InputMethodKeyboardEventVariant::Modifiers(
-                modifiers,
-            ));
+            self.push_im_keyboard(KeyboardEventVariant::Modifiers(modifiers));
             return;
         }
 
@@ -301,15 +293,12 @@ impl KeyboardHandler for SctkState {
             };
         let seat_id = my_seat.seat.clone();
         let kbd_id = keyboard.clone();
-        let mods = my_seat._modifiers;
         let focus = my_seat.kbd_focus.clone();
         _ = my_seat.last_kbd_press.replace((event.clone(), serial));
 
         #[cfg(feature = "wayland_input_method")]
         if self.is_im_filter_keyboard() {
-            self.push_im_keyboard(InputMethodKeyboardEventVariant::Press(
-                event, mods, serial,
-            ));
+            self.push_im_keyboard(KeyboardEventVariant::Press(event, serial));
             return;
         }
 
@@ -322,7 +311,7 @@ impl KeyboardHandler for SctkState {
                 });
                 for surface in surfaces.chain(std::iter::once(&surface)) {
                     self.sctk_events.push(SctkEvent::KeyboardEvent {
-                        variant: KeyboardEventVariant::Press(event.clone()),
+                        variant: KeyboardEventVariant::Press(event.clone(), serial),
                         kbd_id: kbd_id.clone(),
                         seat_id: seat_id.clone(),
                         surface: surface.clone(),
@@ -353,18 +342,16 @@ impl KeyboardHandler for SctkState {
             };
         let seat_id = my_seat.seat.clone();
         let kbd_id = keyboard.clone();
-        let mods = my_seat._modifiers;
         let focus = my_seat.kbd_focus.clone();
 
         #[cfg(feature = "wayland_input_method")]
         if self.is_im_filter_keyboard() {
-            self.push_im_keyboard(InputMethodKeyboardEventVariant::Release(
-                event, mods, serial,
+            self.push_im_keyboard(KeyboardEventVariant::Release(
+                event, serial,
             ));
             return;
         }
 
-        let _ = serial;
         if is_active {
             if let Some(surface) = focus {
                 self.request_redraw(&surface);
@@ -374,7 +361,7 @@ impl KeyboardHandler for SctkState {
                 });
                 for surface in surfaces.chain(std::iter::once(&surface)) {
                     self.sctk_events.push(SctkEvent::KeyboardEvent {
-                        variant: KeyboardEventVariant::Release(event.clone()),
+                        variant: KeyboardEventVariant::Release(event.clone(), serial),
                         kbd_id: kbd_id.clone(),
                         seat_id: seat_id.clone(),
                         surface: surface.clone(),
@@ -413,7 +400,7 @@ impl KeyboardHandler for SctkState {
         #[cfg(feature = "wayland_input_method")]
         if self.is_im_filter_keyboard() {
             self.push_im_keyboard(
-                InputMethodKeyboardEventVariant::Modifiers(modifiers),
+                KeyboardEventVariant::Modifiers(modifiers),
             );
             return;
         }
@@ -474,15 +461,7 @@ impl KeyboardHandler for SctkState {
     ) {
         #[cfg(feature = "wayland_input_method")]
         if self.is_im_filter_keyboard() {
-            let mods = self
-                .seats
-                .iter()
-                .find(|s| s.kbd.as_ref() == Some(keyboard))
-                .map(|s| s._modifiers)
-                .unwrap_or_default();
-            self.push_im_keyboard(InputMethodKeyboardEventVariant::Repeat(
-                event, mods, serial,
-            ));
+            self.push_im_keyboard(KeyboardEventVariant::Repeat(event, serial));
             return;
         }
 
@@ -503,14 +482,13 @@ impl KeyboardHandler for SctkState {
             if let Some(surface) = my_seat.kbd_focus.clone() {
                 self.request_redraw(&surface);
                 self.sctk_events.push(SctkEvent::KeyboardEvent {
-                    variant: KeyboardEventVariant::Repeat(event),
+                    variant: KeyboardEventVariant::Repeat(event, serial),
                     kbd_id,
                     seat_id,
                     surface,
                 });
             }
         }
-        let _ = serial;
     }
 }
 

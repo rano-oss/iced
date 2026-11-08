@@ -152,8 +152,9 @@ impl SeatHandler for SctkState {
                             if let Some(surface) = my_seat.kbd_focus.clone() {
                                 state.sctk_events.push(
                                     SctkEvent::KeyboardEvent {
+                                        // Client soft-repeat has no filter serial.
                                         variant: KeyboardEventVariant::Repeat(
-                                            e,
+                                            e, 0,
                                         ),
                                         kbd_id: kbd.clone(),
                                         seat_id: seat_clone.clone(),

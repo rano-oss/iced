@@ -220,20 +220,12 @@ pub enum SctkEvent {
         event:
             iced_runtime::core::event::wayland::input_method::InputMethodEvent,
     },
+    /// Filter-bound seat keyboard events (same variants as [`KeyboardEventVariant`],
+    /// converted to [`iced_runtime::core::event::wayland::input_method::InputMethodKeyboardEvent`]).
     #[cfg(feature = "wayland_input_method")]
     InputMethodKeyboardEvent {
-        variant: InputMethodKeyboardEventVariant,
+        variant: KeyboardEventVariant,
     },
-}
-
-/// SCTK key events before conversion to iced_core keyboard types.
-#[cfg(feature = "wayland_input_method")]
-#[derive(Debug, Clone)]
-pub enum InputMethodKeyboardEventVariant {
-    Press(KeyEvent, Modifiers, u32),
-    Release(KeyEvent, Modifiers, u32),
-    Repeat(KeyEvent, Modifiers, u32),
-    Modifiers(Modifiers),
 }
 
 #[cfg(feature = "a11y")]
@@ -255,9 +247,12 @@ pub enum SeatEventVariant {
 pub enum KeyboardEventVariant {
     Leave(WlSurface),
     Enter(WlSurface),
-    Press(KeyEvent),
-    Repeat(KeyEvent),
-    Release(KeyEvent),
+    /// Key press and Wayland serial (serial used by IM FilterKey; ignored otherwise).
+    Press(KeyEvent, u32),
+    /// Key repeat and Wayland serial.
+    Repeat(KeyEvent, u32),
+    /// Key release and Wayland serial.
+    Release(KeyEvent, u32),
     Modifiers(Modifiers),
 }
 
@@ -667,7 +662,7 @@ impl SctkEvent {
                         ),
                     ));
                 }
-                KeyboardEventVariant::Press(ke) => {
+                KeyboardEventVariant::Press(ke, _serial) => {
                     let (key, location) = keysym_to_vkey_location(ke.keysym);
                     let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
@@ -692,14 +687,9 @@ impl SctkEvent {
                         ),
                     ))
                 }
-                KeyboardEventVariant::Repeat(KeyEvent {
-                    keysym,
-                    utf8,
-                    raw_code,
-                    ..
-                }) => {
-                    let (key, location) = keysym_to_vkey_location(keysym);
-                    let physical_key = raw_keycode_to_physicalkey(raw_code);
+                KeyboardEventVariant::Repeat(ke, _serial) => {
+                    let (key, location) = keysym_to_vkey_location(ke.keysym);
+                    let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
                         crate::conversion::physical_key(physical_key);
 
@@ -709,7 +699,8 @@ impl SctkEvent {
                             keyboard::Event::KeyPressed {
                                 key: key.clone(),
                                 location: location,
-                                text: utf8
+                                text: ke
+                                    .utf8
                                     .filter(|s| !s.is_empty())
                                     .map(|s| s.into()),
                                 modifiers: modifiers_to_native(*modifiers),
@@ -720,7 +711,7 @@ impl SctkEvent {
                         ),
                     ))
                 }
-                KeyboardEventVariant::Release(ke) => {
+                KeyboardEventVariant::Release(ke, _serial) => {
                     let (k, location) = keysym_to_vkey_location(ke.keysym);
                     let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
@@ -1828,49 +1819,49 @@ impl SctkEvent {
             SctkEvent::InputMethodKeyboardEvent { variant } => {
                 use iced_runtime::core::event::wayland::input_method::InputMethodKeyboardEvent;
                 let im_kbd_event = match variant {
-                    InputMethodKeyboardEventVariant::Press(
-                        key_event,
-                        mods,
-                        serial,
-                    ) => {
+                    KeyboardEventVariant::Press(key_event, serial) => {
                         let (ke, key, mods, serial) =
-                            to_im_key_parts(key_event, mods, serial);
-                        InputMethodKeyboardEvent::Press(ke, key, mods, serial)
-                    }
-                    InputMethodKeyboardEventVariant::Release(
-                        key_event,
-                        mods,
-                        serial,
-                    ) => {
-                        let (ke, key, mods, serial) =
-                            to_im_key_parts(key_event, mods, serial);
-                        InputMethodKeyboardEvent::Release(
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Press(
                             ke, key, mods, serial,
-                        )
+                        ))
                     }
-                    InputMethodKeyboardEventVariant::Repeat(
-                        key_event,
-                        mods,
-                        serial,
-                    ) => {
+                    KeyboardEventVariant::Release(key_event, serial) => {
                         let (ke, key, mods, serial) =
-                            to_im_key_parts(key_event, mods, serial);
-                        InputMethodKeyboardEvent::Repeat(ke, key, mods, serial)
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Release(
+                            ke, key, mods, serial,
+                        ))
                     }
-                    InputMethodKeyboardEventVariant::Modifiers(mods) => {
-                        InputMethodKeyboardEvent::Modifiers(
+                    KeyboardEventVariant::Repeat(key_event, serial) => {
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Repeat(
+                            ke, key, mods, serial,
+                        ))
+                    }
+                    KeyboardEventVariant::Modifiers(mods) => {
+                        *modifiers = mods;
+                        Some(InputMethodKeyboardEvent::Modifiers(
                             modifiers_to_native(mods),
-                        )
+                        ))
                     }
+                    // Filter path does not surface enter/leave to the app.
+                    KeyboardEventVariant::Enter(_)
+                    | KeyboardEventVariant::Leave(_) => None,
                 };
-                events.push((
-                    None,
-                    iced_runtime::core::Event::PlatformSpecific(
-                        PlatformSpecific::Wayland(
-                            wayland::Event::InputMethodKeyboard(im_kbd_event),
+                if let Some(im_kbd_event) = im_kbd_event {
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethodKeyboard(
+                                    im_kbd_event,
+                                ),
+                            ),
                         ),
-                    ),
-                ));
+                    ));
+                }
             }
             #[cfg(feature = "wayland_input_method")]
             SctkEvent::InputMethodPopupEvent {
