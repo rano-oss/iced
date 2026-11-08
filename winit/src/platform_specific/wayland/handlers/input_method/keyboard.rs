@@ -1,4 +1,4 @@
-use std::{env, fmt::Debug, sync::Mutex};
+use std::{fmt::Debug, sync::Mutex};
 
 use cctk::sctk::{
     reexports::client::{
@@ -18,6 +18,10 @@ use wayland_protocols_experimental::keyboard_filter::v3::client::{
 use crate::platform_specific::wayland::event_loop::state::SctkState;
 use crate::platform_specific::wayland::sctk_event::{
     InputMethodKeyboardEventVariant, SctkEvent,
+};
+use crate::platform_specific::wayland::xkb_utils::{
+    compose_state_from_env, modifiers_from_state, state_from_keymap_fd,
+    utf8_for_keysym,
 };
 
 pub struct InputMethodKeyboardData {
@@ -41,32 +45,7 @@ unsafe impl Sync for InputMethodKeyboardData {}
 impl InputMethodKeyboardData {
     pub fn new() -> Self {
         let xkb_context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
-
-        let xkb_compose = if let Some(locale) = env::var_os("LC_ALL")
-            .and_then(|v| if v.is_empty() { None } else { Some(v) })
-            .or_else(|| env::var_os("LC_CTYPE"))
-            .and_then(|v| if v.is_empty() { None } else { Some(v) })
-            .or_else(|| env::var_os("LANG"))
-            .and_then(|v| if v.is_empty() { None } else { Some(v) })
-            .unwrap_or_else(|| "C".into())
-            .to_str()
-        {
-            if let Ok(table) = xkb::compose::Table::new_from_locale(
-                &xkb_context,
-                locale.as_ref(),
-                xkb::compose::COMPILE_NO_FLAGS,
-            ) {
-                Some(xkb::compose::State::new(
-                    &table,
-                    xkb::compose::COMPILE_NO_FLAGS,
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
+        let xkb_compose = compose_state_from_env(&xkb_context);
         Self {
             xkb_context: Mutex::new(xkb_context),
             xkb_state: Mutex::new(None),
@@ -78,63 +57,8 @@ impl InputMethodKeyboardData {
         let guard = self.xkb_state.lock().unwrap();
         guard
             .as_ref()
-            .map(Self::modifiers_from_state)
+            .map(modifiers_from_state)
             .unwrap_or_default()
-    }
-
-    fn modifiers_from_state(state: &xkb::State) -> Modifiers {
-        Modifiers {
-            ctrl: state.mod_name_is_active(
-                xkb::MOD_NAME_CTRL,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-            alt: state.mod_name_is_active(
-                xkb::MOD_NAME_ALT,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-            shift: state.mod_name_is_active(
-                xkb::MOD_NAME_SHIFT,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-            caps_lock: state.mod_name_is_active(
-                xkb::MOD_NAME_CAPS,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-            logo: state.mod_name_is_active(
-                xkb::MOD_NAME_LOGO,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-            num_lock: state.mod_name_is_active(
-                xkb::MOD_NAME_NUM,
-                xkb::STATE_MODS_EFFECTIVE,
-            ),
-        }
-    }
-
-    fn utf8_for_keysym(
-        &self,
-        xkb_state: &xkb::State,
-        keysym: xkb::Keysym,
-        raw_code: u32,
-        feed_compose: bool,
-    ) -> Option<String> {
-        if !feed_compose {
-            return Some(xkb_state.key_get_utf8((raw_code + 8).into()));
-        }
-        let mut compose = self.xkb_compose.lock().unwrap();
-        match compose.as_mut() {
-            Some(compose) => match compose.feed(keysym) {
-                xkb::FeedResult::Ignored => None,
-                xkb::FeedResult::Accepted => match compose.status() {
-                    xkb::Status::Composed => compose.utf8(),
-                    xkb::Status::Nothing => {
-                        Some(xkb_state.key_get_utf8((raw_code + 8).into()))
-                    }
-                    _ => None,
-                },
-            },
-            None => Some(xkb_state.key_get_utf8((raw_code + 8).into())),
-        }
     }
 
     fn push_key(
@@ -150,18 +74,20 @@ impl InputMethodKeyboardData {
             return;
         };
         let keysym = guard.key_get_one_sym((key + 8).into());
+        let mut compose = self.xkb_compose.lock().unwrap();
         let utf8 = match key_state {
             wl_keyboard::KeyState::Pressed => {
-                self.utf8_for_keysym(guard, keysym, key, true)
+                utf8_for_keysym(&mut compose, guard, keysym, key, true)
             }
             wl_keyboard::KeyState::Repeated => {
-                self.utf8_for_keysym(guard, keysym, key, false)
+                utf8_for_keysym(&mut compose, guard, keysym, key, false)
             }
             _ => None,
         };
-        // Read mods while we already hold xkb_state — do not call
-        // update_modifiers() here (that would re-lock and deadlock).
-        let mods = Self::modifiers_from_state(guard);
+        drop(compose);
+        // Mods while we already hold xkb_state — do not call update_modifiers()
+        // (that would re-lock and deadlock).
+        let mods = modifiers_from_state(guard);
         drop(state_guard);
 
         let event = KeyEvent {
@@ -178,14 +104,11 @@ impl InputMethodKeyboardData {
                 InputMethodKeyboardEventVariant::Press(event, mods, serial)
             }
             // Compositor-owned repeat (wl_keyboard v10+ / keyboard-filter).
-            // Real serial required so the IME can filter after preedit ends.
             _ => InputMethodKeyboardEventVariant::Repeat(event, mods, serial),
         };
         state
             .sctk_events
             .push(SctkEvent::InputMethodKeyboardEvent { variant });
-        // Mark the candidate popup for the upcoming frame pass (same path as
-        // seat keyboard → request_redraw during dispatch).
         if let Some(popup) = state.input_method_popup.as_ref() {
             let surface = popup.wl_surface.clone();
             state.request_redraw(&surface);
@@ -202,7 +125,6 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
         _conn: &Connection,
         _qh: &QueueHandle<SctkState>,
     ) {
-        log::debug!(target: "im_kbd", "IM keyboard event: {:?}", std::mem::discriminant(&event));
         match event {
             wl_keyboard::Event::Keymap { format, fd, size } => match format {
                 WEnum::Value(format) => match format {
@@ -211,26 +133,10 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                     }
                     wl_keyboard::KeymapFormat::XkbV1 => {
                         let context = udata.xkb_context.lock().unwrap();
-                        #[allow(unused_unsafe)]
-                        match unsafe {
-                            xkb::Keymap::new_from_fd(
-                                &context,
-                                fd,
-                                size as usize,
-                                xkb::KEYMAP_FORMAT_TEXT_V1,
-                                xkb::COMPILE_NO_FLAGS,
-                            )
-                        } {
-                            Ok(Some(keymap)) => {
-                                *udata.xkb_state.lock().unwrap() =
-                                    Some(xkb::State::new(&keymap));
-                            }
-                            Ok(None) => {
-                                log::error!(target: "sctk", "invalid keymap");
-                            }
-                            Err(err) => {
-                                log::error!(target: "sctk", "{}", err);
-                            }
+                        if let Some(new_state) =
+                            state_from_keymap_fd(&context, fd, size)
+                        {
+                            *udata.xkb_state.lock().unwrap() = Some(new_state);
                         }
                     }
                     _ => {
@@ -284,7 +190,6 @@ impl Dispatch<WlKeyboard, InputMethodKeyboardData> for SctkState {
                 });
             }
 
-            // Repeat rate is compositor-owned when keyboard-filter is bound.
             wl_keyboard::Event::RepeatInfo { .. }
             | wl_keyboard::Event::Enter { .. }
             | wl_keyboard::Event::Leave { .. } => {}

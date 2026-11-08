@@ -6,6 +6,8 @@ pub mod keymap;
 pub mod sctk_event;
 pub mod subsurface_widget;
 pub mod winit_window;
+#[cfg(feature = "wayland_input_method")]
+pub(crate) mod xkb_utils;
 
 use super::{PlatformSpecific, SurfaceIdWrapper};
 use crate::{Control, CreateCompositor, Program, WindowManager};
