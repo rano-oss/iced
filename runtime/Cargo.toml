@@ -18,6 +18,7 @@ debug = []
 selector = ["dep:iced_selector"]
 a11y = ["iced_accessibility", "iced_core/a11y"]
 wayland = ["iced_core/wayland", "dep:cctk"]
+wayland_input_method = ["dep:wayland-protocols-experimental"]
 
 [dependencies]
 bytes.workspace = true
@@ -33,6 +34,8 @@ sipper.optional = true
 iced_selector.workspace = true
 iced_selector.optional = true
 iced_futures.features = ["thread-pool"]
+wayland-protocols-experimental.workspace = true
+wayland-protocols-experimental.optional = true
 iced_accessibility.workspace = true
 iced_accessibility.optional = true
 window_clipboard.workspace = true

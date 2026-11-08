@@ -4,13 +4,30 @@ use crate::platform_specific::wayland::{
 };
 use cctk::sctk::{
     delegate_keyboard,
-    seat::keyboard::{KeyboardHandler, Keysym, Modifiers},
+    seat::keyboard::{KeyboardHandler, KeyEvent, Keysym, Modifiers},
 };
 use cctk::sctk::{
     reexports::client::Proxy,
     seat::keyboard::RawModifiers,
     shell::{WaylandSurface, wlr_layer::KeyboardInteractivity},
 };
+
+#[cfg(feature = "wayland_input_method")]
+impl SctkState {
+    /// Filter-bound seat keyboard → IM key events (serial required for FilterKey).
+    fn push_im_keyboard(&mut self, variant: KeyboardEventVariant) {
+        self.sctk_events
+            .push(SctkEvent::InputMethodKeyboardEvent { variant });
+        if let Some(popup) = self.input_method_popup.as_ref() {
+            let surface = popup.wl_surface.clone();
+            self.request_redraw(&surface);
+        }
+    }
+
+    fn is_im_filter_keyboard(&self) -> bool {
+        self.keyboard_filter.is_some()
+    }
+}
 
 fn modifiers_from_keysyms(
     keysyms: &[Keysym],
@@ -59,6 +76,22 @@ impl KeyboardHandler for SctkState {
         _raw: &[u32],
         keysyms: &[Keysym],
     ) {
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            // Dummy surface enter while IM is active — track focus/mods only.
+            let Some(my_seat) =
+                self.seats.iter_mut().find(|s| s.kbd.as_ref() == Some(keyboard))
+            else {
+                return;
+            };
+            _ = my_seat.kbd_focus.replace(surface.clone());
+            let modifiers =
+                modifiers_from_keysyms(keysyms, my_seat._modifiers);
+            my_seat._modifiers = modifiers;
+            self.push_im_keyboard(KeyboardEventVariant::Modifiers(modifiers));
+            return;
+        }
+
         let (i, mut is_active, seat, modifiers) = {
             let (i, is_active, my_seat) =
                 match self.seats.iter_mut().enumerate().find_map(|(i, s)| {
@@ -138,6 +171,16 @@ impl KeyboardHandler for SctkState {
         surface: &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,
         _serial: u32,
     ) {
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            if let Some(my_seat) =
+                self.seats.iter_mut().find(|s| s.kbd.as_ref() == Some(keyboard))
+            {
+                _ = my_seat.kbd_focus.take();
+            }
+            return;
+        }
+
         self.request_redraw(surface);
         let (is_active, seat, kbd) = {
             let (is_active, my_seat) =
@@ -235,7 +278,7 @@ impl KeyboardHandler for SctkState {
         _qh: &cctk::sctk::reexports::client::QueueHandle<Self>,
         keyboard: &cctk::sctk::reexports::client::protocol::wl_keyboard::WlKeyboard,
         serial: u32,
-        event: cctk::sctk::seat::keyboard::KeyEvent,
+        event: KeyEvent,
     ) {
         let (is_active, my_seat) =
             match self.seats.iter_mut().enumerate().find_map(|(i, s)| {
@@ -250,9 +293,17 @@ impl KeyboardHandler for SctkState {
             };
         let seat_id = my_seat.seat.clone();
         let kbd_id = keyboard.clone();
+        let focus = my_seat.kbd_focus.clone();
         _ = my_seat.last_kbd_press.replace((event.clone(), serial));
+
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            self.push_im_keyboard(KeyboardEventVariant::Press(event, serial));
+            return;
+        }
+
         if is_active {
-            if let Some(surface) = my_seat.kbd_focus.clone() {
+            if let Some(surface) = focus {
                 self.request_redraw(&surface);
                 let surfaces = self.subsurfaces.iter().filter_map(|s| {
                     (s.instance.parent == surface)
@@ -260,7 +311,7 @@ impl KeyboardHandler for SctkState {
                 });
                 for surface in surfaces.chain(std::iter::once(&surface)) {
                     self.sctk_events.push(SctkEvent::KeyboardEvent {
-                        variant: KeyboardEventVariant::Press(event.clone()),
+                        variant: KeyboardEventVariant::Press(event.clone(), serial),
                         kbd_id: kbd_id.clone(),
                         seat_id: seat_id.clone(),
                         surface: surface.clone(),
@@ -275,8 +326,8 @@ impl KeyboardHandler for SctkState {
         _conn: &cctk::sctk::reexports::client::Connection,
         _qh: &cctk::sctk::reexports::client::QueueHandle<Self>,
         keyboard: &cctk::sctk::reexports::client::protocol::wl_keyboard::WlKeyboard,
-        _serial: u32,
-        event: cctk::sctk::seat::keyboard::KeyEvent,
+        serial: u32,
+        event: KeyEvent,
     ) {
         let (is_active, my_seat) =
             match self.seats.iter_mut().enumerate().find_map(|(i, s)| {
@@ -291,9 +342,18 @@ impl KeyboardHandler for SctkState {
             };
         let seat_id = my_seat.seat.clone();
         let kbd_id = keyboard.clone();
+        let focus = my_seat.kbd_focus.clone();
+
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            self.push_im_keyboard(KeyboardEventVariant::Release(
+                event, serial,
+            ));
+            return;
+        }
 
         if is_active {
-            if let Some(surface) = my_seat.kbd_focus.clone() {
+            if let Some(surface) = focus {
                 self.request_redraw(&surface);
                 let surfaces = self.subsurfaces.iter().filter_map(|s| {
                     (s.instance.parent == surface)
@@ -301,7 +361,7 @@ impl KeyboardHandler for SctkState {
                 });
                 for surface in surfaces.chain(std::iter::once(&surface)) {
                     self.sctk_events.push(SctkEvent::KeyboardEvent {
-                        variant: KeyboardEventVariant::Release(event.clone()),
+                        variant: KeyboardEventVariant::Release(event.clone(), serial),
                         kbd_id: kbd_id.clone(),
                         seat_id: seat_id.clone(),
                         surface: surface.clone(),
@@ -317,7 +377,7 @@ impl KeyboardHandler for SctkState {
         _qh: &cctk::sctk::reexports::client::QueueHandle<Self>,
         keyboard: &cctk::sctk::reexports::client::protocol::wl_keyboard::WlKeyboard,
         _serial: u32,
-        modifiers: cctk::sctk::seat::keyboard::Modifiers,
+        modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
@@ -334,10 +394,19 @@ impl KeyboardHandler for SctkState {
             };
         let seat_id = my_seat.seat.clone();
         let kbd_id = keyboard.clone();
+        let focus = my_seat.kbd_focus.clone();
         my_seat._modifiers = modifiers;
 
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            self.push_im_keyboard(
+                KeyboardEventVariant::Modifiers(modifiers),
+            );
+            return;
+        }
+
         if is_active {
-            if let Some(surface) = my_seat.kbd_focus.clone() {
+            if let Some(surface) = focus {
                 self.request_redraw(&surface);
                 let surfaces = self.subsurfaces.iter().filter_map(|s| {
                     (s.instance.parent == surface)
@@ -386,11 +455,40 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &wayland_client::Connection,
         _qh: &wayland_client::QueueHandle<Self>,
-        _keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
-        _serial: u32,
-        _event: cctk::sctk::seat::keyboard::KeyEvent,
+        keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
+        serial: u32,
+        event: KeyEvent,
     ) {
-        // TODO
+        #[cfg(feature = "wayland_input_method")]
+        if self.is_im_filter_keyboard() {
+            self.push_im_keyboard(KeyboardEventVariant::Repeat(event, serial));
+            return;
+        }
+
+        let (is_active, my_seat) =
+            match self.seats.iter_mut().enumerate().find_map(|(i, s)| {
+                if s.kbd.as_ref() == Some(keyboard) {
+                    Some((i, s))
+                } else {
+                    None
+                }
+            }) {
+                Some((i, s)) => (i == 0, s),
+                None => return,
+            };
+        let seat_id = my_seat.seat.clone();
+        let kbd_id = keyboard.clone();
+        if is_active {
+            if let Some(surface) = my_seat.kbd_focus.clone() {
+                self.request_redraw(&surface);
+                self.sctk_events.push(SctkEvent::KeyboardEvent {
+                    variant: KeyboardEventVariant::Repeat(event, serial),
+                    kbd_id,
+                    seat_id,
+                    surface,
+                });
+            }
+        }
     }
 }
 

@@ -1,12 +1,16 @@
 use crate::platform_specific::wayland::{
     event_loop::{state::SctkSeat, state::SctkState},
-    sctk_event::{KeyboardEventVariant, SctkEvent, SeatEventVariant},
+    sctk_event::{SctkEvent, SeatEventVariant},
 };
+#[cfg(not(feature = "wayland_input_method"))]
+use crate::platform_specific::wayland::sctk_event::KeyboardEventVariant;
 use cctk::sctk::{
     delegate_seat,
-    reexports::client::{Proxy, protocol::wl_keyboard::WlKeyboard},
+    reexports::client::Proxy,
     seat::{SeatHandler, keyboard::Modifiers, pointer::ThemeSpec},
 };
+#[cfg(not(feature = "wayland_input_method"))]
+use cctk::sctk::reexports::client::protocol::wl_keyboard::WlKeyboard;
 use std::sync::Arc;
 
 impl SeatHandler for SctkState {
@@ -39,6 +43,8 @@ impl SeatHandler for SctkState {
             icon: None,
             active_icon: None,
             hidden: false,
+            #[cfg(feature = "wayland_input_method")]
+            input_method: None,
         });
     }
 
@@ -67,6 +73,8 @@ impl SeatHandler for SctkState {
                     icon: None,
                     active_icon: None,
                     hidden: false,
+                    #[cfg(feature = "wayland_input_method")]
+                    input_method: None,
                 });
                 self.seats.last_mut().unwrap()
             }
@@ -74,39 +82,97 @@ impl SeatHandler for SctkState {
         // TODO data device
         match capability {
             cctk::sctk::seat::Capability::Keyboard => {
-                let seat_clone = seat.clone();
-                let seat_clone_2 = seat.clone();
-                if let Ok(kbd) = self.seat_state.get_keyboard_with_repeat(
-                    qh,
-                    &seat,
-                    None,
-                    self.loop_handle.clone(),
-                    Box::new(move |state, kbd: &WlKeyboard, e| {
-                        let Some(my_seat) = state
-                            .seats
-                            .iter_mut()
-                            .find(|s| s.seat == seat_clone_2)
-                        else {
-                            return;
-                        };
-                        if let Some(surface) = my_seat.kbd_focus.clone() {
-                            state.sctk_events.push(SctkEvent::KeyboardEvent {
-                                variant: KeyboardEventVariant::Repeat(e),
-                                kbd_id: kbd.clone(),
-                                seat_id: seat_clone.clone(),
-                                surface,
-                            });
+                #[cfg(feature = "wayland_input_method")]
+                {
+                    // IME builds: one SCTK keyboard bound to keyboard-filter, or
+                    // none. No client soft-repeat (compositor owns repeat).
+                    if my_seat.input_method.is_none() {
+                        match (
+                            self.input_method_manager.as_ref(),
+                            self.keyboard_filter_manager.as_ref(),
+                        ) {
+                            (Some(im_manager), Some(kf_manager)) => {
+                                let im = im_manager
+                                    .input_method(&seat, &self.queue_handle);
+                                if let Ok(kbd) = self
+                                    .seat_state
+                                    .get_keyboard(qh, &seat, None)
+                                {
+                                    let dummy_surface = self
+                                        .compositor_state
+                                        .create_surface(&self.queue_handle);
+                                    let kf = kf_manager.bind_to_input_method(
+                                        &kbd,
+                                        &im,
+                                        &dummy_surface,
+                                        &self.queue_handle,
+                                        (),
+                                    );
+                                    self.keyboard_filter = Some(kf);
+                                    my_seat.input_method = Some(im);
+                                    self.sctk_events.push(
+                                        SctkEvent::SeatEvent {
+                                            variant:
+                                                SeatEventVariant::NewCapability(
+                                                    capability,
+                                                    kbd.id(),
+                                                ),
+                                            id: seat.clone(),
+                                        },
+                                    );
+                                    _ = my_seat.kbd.replace(kbd);
+                                }
+                            }
+                            _ => {
+                                log::warn!(
+                                    "wayland_input_method enabled but IM/filter \
+                                     globals missing; no wl_keyboard"
+                                );
+                            }
                         }
-                    }),
-                ) {
-                    self.sctk_events.push(SctkEvent::SeatEvent {
-                        variant: SeatEventVariant::NewCapability(
-                            capability,
-                            kbd.id(),
-                        ),
-                        id: seat.clone(),
-                    });
-                    _ = my_seat.kbd.replace(kbd);
+                    }
+                }
+                #[cfg(not(feature = "wayland_input_method"))]
+                {
+                    let seat_clone = seat.clone();
+                    let seat_clone_2 = seat.clone();
+                    if let Ok(kbd) = self.seat_state.get_keyboard_with_repeat(
+                        qh,
+                        &seat,
+                        None,
+                        self.loop_handle.clone(),
+                        Box::new(move |state, kbd: &WlKeyboard, e| {
+                            let Some(my_seat) = state
+                                .seats
+                                .iter_mut()
+                                .find(|s| s.seat == seat_clone_2)
+                            else {
+                                return;
+                            };
+                            if let Some(surface) = my_seat.kbd_focus.clone() {
+                                state.sctk_events.push(
+                                    SctkEvent::KeyboardEvent {
+                                        // Client soft-repeat has no filter serial.
+                                        variant: KeyboardEventVariant::Repeat(
+                                            e, 0,
+                                        ),
+                                        kbd_id: kbd.clone(),
+                                        seat_id: seat_clone.clone(),
+                                        surface,
+                                    },
+                                );
+                            }
+                        }),
+                    ) {
+                        self.sctk_events.push(SctkEvent::SeatEvent {
+                            variant: SeatEventVariant::NewCapability(
+                                capability,
+                                kbd.id(),
+                            ),
+                            id: seat.clone(),
+                        });
+                        _ = my_seat.kbd.replace(kbd);
+                    }
                 }
             }
             cctk::sctk::seat::Capability::Pointer => {

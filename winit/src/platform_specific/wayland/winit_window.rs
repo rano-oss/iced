@@ -201,6 +201,21 @@ impl winit::window::Window for SctkWinitWindow {
                     .tx
                     .send(Action::SubsurfaceResize(self.id.inner(), size));
             }
+            #[cfg(feature = "wayland_input_method")]
+            CommonSurface::InputMethodPopup(wl_surface) => {
+                if logical_size.width == 0 || logical_size.height == 0 {
+                    return None;
+                }
+                guard.size = logical_size;
+                guard.requested_size =
+                    (Some(logical_size.width), Some(logical_size.height));
+                if let Some(viewport) = guard.wp_viewport.as_ref() {
+                    viewport.set_destination(
+                        guard.size.width as i32,
+                        guard.size.height as i32,
+                    );
+                }
+            }
         }
         None
     }

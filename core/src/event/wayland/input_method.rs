@@ -1,0 +1,74 @@
+use crate::keyboard::Key;
+
+/// Keyboard modifiers for IM key events (same bitflags as [`crate::keyboard::Modifiers`]).
+pub use crate::keyboard::Modifiers;
+
+/// input method events
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputMethodEvent {
+    /// A new text input is interacting with the application
+    Activate,
+    /// A text input is not interacting with the application anymore
+    Deactivate,
+    /// The surrounding plain text around the cursor, excluding the preedit text
+    SurroundingText {
+        /// plain text
+        text: String,
+        /// Cursor position
+        cursor: u32,
+        /// Anchor position
+        anchor: u32,
+    },
+    /// indicates the cause of surrounding text change
+    TextChangeCause {
+        /// Change cause value
+        cause: u32,
+    },
+    /// content purpose and hint
+    ContentType {
+        /// Content hint flags
+        hint: u32,
+        /// Content purpose
+        purpose: u32,
+    },
+    /// Available actions from the text input
+    AvailableActions {
+        /// Bitmask of available actions
+        available_actions: Vec<u8>,
+    },
+    /// apply state
+    Done,
+    /// The input method is no longer available
+    Unavailable,
+}
+
+/// Input method keyboard events
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputMethodKeyboardEvent {
+    /// A key is pressed
+    Press(KeyEvent, Key, Modifiers, u32),
+    /// A key is released
+    Release(KeyEvent, Key, Modifiers, u32),
+    /// A key is repeated
+    Repeat(KeyEvent, Key, Modifiers, u32),
+    /// Modifiers are updated
+    Modifiers(Modifiers),
+}
+
+/// Data associated with a key press or release event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyEvent {
+    /// Time at which the keypress occurred.
+    pub time: u32,
+
+    /// The raw value of the key.
+    pub raw_code: u32,
+
+    /// The interpreted symbol of the key (keysym value).
+    pub keysym: u32,
+
+    /// UTF-8 interpretation of the entered text.
+    ///
+    /// This will always be [`None`] on release events.
+    pub utf8: Option<String>,
+}

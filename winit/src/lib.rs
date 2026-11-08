@@ -1436,9 +1436,13 @@ async fn run_instance<P>(
                             );
 
                         let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
+                        // Skip 0×0 autosize (hidden content) and same-size.
+                        if requested_size.width > 0.0
+                            && requested_size.height > 0.0
+                            && (requested_physical_size.width
+                                != physical_size.width
+                                || requested_physical_size.height
+                                    != physical_size.height)
                         {
                             // FIXME what to do when we are stuck in a configure event/resize request loop
                             // We don't have control over how winit handles this.
@@ -1464,6 +1468,18 @@ async fn run_instance<P>(
                                 id,
                                 window.raw.as_ref(),
                             );
+
+                            // Sync xx-IM positioner when candidate layout size changes
+                            #[cfg(all(
+                                feature = "wayland_input_method",
+                                wayland_platform
+                            ))]
+                            platform_specific_handler
+                                .reposition_im_popup_if_resized(
+                                    id,
+                                    requested_size.width as u32,
+                                    requested_size.height as u32,
+                                );
                         }
                     }
 

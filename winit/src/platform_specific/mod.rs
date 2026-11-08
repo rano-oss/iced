@@ -42,6 +42,8 @@ pub enum SurfaceIdWrapper {
     Popup(window::Id),
     SessionLock(window::Id),
     Subsurface(window::Id),
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopup(window::Id),
 }
 impl SurfaceIdWrapper {
     pub fn inner(&self) -> window::Id {
@@ -51,6 +53,8 @@ impl SurfaceIdWrapper {
             SurfaceIdWrapper::Popup(id) => *id,
             SurfaceIdWrapper::SessionLock(id) => *id,
             SurfaceIdWrapper::Subsurface(id) => *id,
+            #[cfg(feature = "wayland_input_method")]
+            SurfaceIdWrapper::InputMethodPopup(id) => *id,
         }
     }
 }
@@ -77,6 +81,34 @@ impl PlatformSpecific {
     #[cfg(wayland_platform)]
     pub(crate) fn has_popup(&self, toplevel: window::Id) -> bool {
         self.wayland.has_popup(toplevel)
+    }
+
+    /// If the given window ID is the IM popup, sync the compositor positioner
+    /// to the new content size. Zero sizes and no-ops are filtered when
+    /// handling `Action::Size` via `InputMethodPopup::max_size`.
+    #[cfg(all(feature = "wayland_input_method", wayland_platform))]
+    pub(crate) fn reposition_im_popup_if_resized(
+        &mut self,
+        id: window::Id,
+        width: u32,
+        height: u32,
+    ) {
+        let is_im_popup = self.wayland.surface_ids.values().any(|w| {
+            matches!(w, SurfaceIdWrapper::InputMethodPopup(popup_id) if *popup_id == id)
+        });
+        if !is_im_popup {
+            return;
+        }
+        use iced_runtime::platform_specific::wayland::{
+            self as runtime_wl, input_method as im,
+        };
+        self.send_action(iced_runtime::platform_specific::Action::Wayland(
+            runtime_wl::Action::InputMethod(im::Action::Size {
+                width,
+                height,
+                positioner: im::PopupPositioner::default(),
+            }),
+        ));
     }
 
     pub(crate) fn retain_subsurfaces<F: Fn(window::Id) -> bool>(

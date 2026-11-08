@@ -161,6 +161,16 @@ pub enum SctkEvent {
     },
 
     SubsurfaceEvent(SubsurfaceEventVariant),
+
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodPopupEvent {
+        variant: InputMethodPopupEventVariant,
+        id: WlSurface,
+    },
+
+    //
+    // output events
+    //
     NewOutput {
         id: WlOutput,
         info: Option<OutputInfo>,
@@ -204,6 +214,18 @@ pub enum SctkEvent {
     },
     Subcompositor(SubsurfaceState),
     ShortcutsInhibited(bool),
+    /// Already in iced_core form (no duplicate variant enum).
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodEvent {
+        event:
+            iced_runtime::core::event::wayland::input_method::InputMethodEvent,
+    },
+    /// Filter-bound seat keyboard events (same variants as [`KeyboardEventVariant`],
+    /// converted to [`iced_runtime::core::event::wayland::input_method::InputMethodKeyboardEvent`]).
+    #[cfg(feature = "wayland_input_method")]
+    InputMethodKeyboardEvent {
+        variant: KeyboardEventVariant,
+    },
 }
 
 #[cfg(feature = "a11y")]
@@ -225,9 +247,12 @@ pub enum SeatEventVariant {
 pub enum KeyboardEventVariant {
     Leave(WlSurface),
     Enter(WlSurface),
-    Press(KeyEvent),
-    Repeat(KeyEvent),
-    Release(KeyEvent),
+    /// Key press and Wayland serial (serial used by IM FilterKey; ignored otherwise).
+    Press(KeyEvent, u32),
+    /// Key repeat and Wayland serial.
+    Repeat(KeyEvent, u32),
+    /// Key release and Wayland serial.
+    Release(KeyEvent, u32),
     Modifiers(Modifiers),
 }
 
@@ -311,6 +336,23 @@ pub enum LayerSurfaceEventVariant {
     Configure(LayerSurfaceConfigure, WlSurface, bool),
     /// Scale Factor
     ScaleFactorChanged(f64, Option<WpViewport>),
+}
+
+#[cfg(feature = "wayland_input_method")]
+#[derive(Debug, Clone)]
+pub enum InputMethodPopupEventVariant {
+    /// Sent after creation of the input method popup surface
+    Created(
+        QueueHandle<SctkState>,
+        CommonSurface,
+        SurfaceId,
+        Arc<Mutex<Common>>,
+        WlDisplay,
+    ),
+    /// Configure acked; surface size follows content layout.
+    Configure,
+    /// Done / closed
+    Done,
 }
 
 /// Pending update to a window requested by the user.
@@ -537,6 +579,8 @@ impl SctkEvent {
                                 ),
                             ),
                             SurfaceIdWrapper::Subsurface(id) => None,
+                            #[cfg(feature = "wayland_input_method")]
+                            SurfaceIdWrapper::InputMethodPopup(_) => None,
                         })
                     {
                         events.push((
@@ -599,6 +643,8 @@ impl SctkEvent {
                                     ),
                                 ),
                                 SurfaceIdWrapper::Subsurface(_) => None,
+                                #[cfg(feature = "wayland_input_method")]
+                                SurfaceIdWrapper::InputMethodPopup(_) => None,
                             }
                             .map(|e| (Some(id.inner()), e))
                         })
@@ -616,7 +662,7 @@ impl SctkEvent {
                         ),
                     ));
                 }
-                KeyboardEventVariant::Press(ke) => {
+                KeyboardEventVariant::Press(ke, _serial) => {
                     let (key, location) = keysym_to_vkey_location(ke.keysym);
                     let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
@@ -641,14 +687,9 @@ impl SctkEvent {
                         ),
                     ))
                 }
-                KeyboardEventVariant::Repeat(KeyEvent {
-                    keysym,
-                    utf8,
-                    raw_code,
-                    ..
-                }) => {
-                    let (key, location) = keysym_to_vkey_location(keysym);
-                    let physical_key = raw_keycode_to_physicalkey(raw_code);
+                KeyboardEventVariant::Repeat(ke, _serial) => {
+                    let (key, location) = keysym_to_vkey_location(ke.keysym);
+                    let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
                         crate::conversion::physical_key(physical_key);
 
@@ -658,7 +699,8 @@ impl SctkEvent {
                             keyboard::Event::KeyPressed {
                                 key: key.clone(),
                                 location: location,
-                                text: utf8
+                                text: ke
+                                    .utf8
                                     .filter(|s| !s.is_empty())
                                     .map(|s| s.into()),
                                 modifiers: modifiers_to_native(*modifiers),
@@ -669,7 +711,7 @@ impl SctkEvent {
                         ),
                     ))
                 }
-                KeyboardEventVariant::Release(ke) => {
+                KeyboardEventVariant::Release(ke, _serial) => {
                     let (k, location) = keysym_to_vkey_location(ke.keysym);
                     let physical_key = raw_keycode_to_physicalkey(ke.raw_code);
                     let physical_key =
@@ -859,10 +901,11 @@ impl SctkEvent {
                                 .ceil() as u32,
                             );
                         let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
-                        {
+                        if logical_size_request_changed(
+                            requested_size,
+                            requested_physical_size,
+                            physical_size,
+                        ) {
                             // FIXME what to do when we are stuck in a configure event/resize request loop
                             // We don't have control over how winit handles this.
                             window.resize_enabled = true;
@@ -1072,11 +1115,11 @@ impl SctkEvent {
                                         as u32,
                                 );
                             let physical_size = window.state.physical_size();
-                            if requested_physical_size.width
-                                != physical_size.width
-                                || requested_physical_size.height
-                                    != physical_size.height
-                            {
+                            if logical_size_request_changed(
+                                requested_size,
+                                requested_physical_size,
+                                physical_size,
+                            ) {
                                 // FIXME what to do when we are stuck in a configure event/resize request loop
                                 // We don't have control over how winit handles this.
                                 window.resize_enabled = true;
@@ -1319,10 +1362,11 @@ impl SctkEvent {
                         .ceil() as u32,
                     );
                     let physical_size = window.state.physical_size();
-                    if requested_physical_size.width != physical_size.width
-                        || requested_physical_size.height
-                            != physical_size.height
-                    {
+                    if logical_size_request_changed(
+                        requested_size,
+                        requested_physical_size,
+                        physical_size,
+                    ) {
                         // FIXME what to do when we are stuck in a configure event/resize request loop
                         // We don't have control over how winit handles this.
                         window.resize_enabled = true;
@@ -1648,10 +1692,11 @@ impl SctkEvent {
                                 .ceil() as u32,
                             );
                         let physical_size = window.state.physical_size();
-                        if requested_physical_size.width != physical_size.width
-                            || requested_physical_size.height
-                                != physical_size.height
-                        {
+                        if logical_size_request_changed(
+                            requested_size,
+                            requested_physical_size,
+                            physical_size,
+                        ) {
                             // FIXME what to do when we are stuck in a configure event/resize request loop
                             // We don't have control over how winit handles this.
                             window.resize_enabled = true;
@@ -1759,8 +1804,206 @@ impl SctkEvent {
                     PlatformSpecific::Wayland(wayland::Event::BlurEnabled),
                 ),
             )),
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodEvent { event } => {
+                events.push((
+                    None,
+                    iced_runtime::core::Event::PlatformSpecific(
+                        PlatformSpecific::Wayland(wayland::Event::InputMethod(
+                            event,
+                        )),
+                    ),
+                ));
+            }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodKeyboardEvent { variant } => {
+                use iced_runtime::core::event::wayland::input_method::InputMethodKeyboardEvent;
+                let im_kbd_event = match variant {
+                    KeyboardEventVariant::Press(key_event, serial) => {
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Press(
+                            ke, key, mods, serial,
+                        ))
+                    }
+                    KeyboardEventVariant::Release(key_event, serial) => {
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Release(
+                            ke, key, mods, serial,
+                        ))
+                    }
+                    KeyboardEventVariant::Repeat(key_event, serial) => {
+                        let (ke, key, mods, serial) =
+                            to_im_key_parts(key_event, *modifiers, serial);
+                        Some(InputMethodKeyboardEvent::Repeat(
+                            ke, key, mods, serial,
+                        ))
+                    }
+                    KeyboardEventVariant::Modifiers(mods) => {
+                        *modifiers = mods;
+                        Some(InputMethodKeyboardEvent::Modifiers(
+                            modifiers_to_native(mods),
+                        ))
+                    }
+                    // Filter path does not surface enter/leave to the app.
+                    KeyboardEventVariant::Enter(_)
+                    | KeyboardEventVariant::Leave(_) => None,
+                };
+                if let Some(im_kbd_event) = im_kbd_event {
+                    events.push((
+                        None,
+                        iced_runtime::core::Event::PlatformSpecific(
+                            PlatformSpecific::Wayland(
+                                wayland::Event::InputMethodKeyboard(
+                                    im_kbd_event,
+                                ),
+                            ),
+                        ),
+                    ));
+                }
+            }
+            #[cfg(feature = "wayland_input_method")]
+            SctkEvent::InputMethodPopupEvent {
+                variant,
+                id: surface,
+            } => match variant {
+                InputMethodPopupEventVariant::Created(
+                    queue_handle,
+                    surface,
+                    surface_id,
+                    common,
+                    display,
+                ) => {
+                    let wl_surface = surface.wl_surface();
+                    let object_id = wl_surface.id();
+                    let wrapper =
+                        SurfaceIdWrapper::InputMethodPopup(surface_id.clone());
+                    _ = surface_ids.insert(object_id.clone(), wrapper.clone());
+                    let sctk_winit = SctkWinitWindow::new(
+                        sctk_tx.clone(),
+                        common,
+                        wrapper,
+                        surface,
+                        display,
+                        queue_handle,
+                    );
+                    if compositor.is_none() {
+                        match create_compositor(
+                            sctk_winit.clone(),
+                            create_compositor_data,
+                        )
+                        .await
+                        {
+                            Ok(c) => *compositor = Some(c),
+                            Err(error) => {
+                                control_sender
+                                    .start_send(Control::Crash(
+                                        Error::GraphicsCreationFailed(error),
+                                    ))
+                                    .expect("Send control message");
+                                return;
+                            }
+                        };
+                    }
+                    let compositor = compositor.as_mut().unwrap();
+                    let window = window_manager.insert(
+                        surface_id,
+                        sctk_winit,
+                        program,
+                        compositor,
+                        false,
+                        theme::Mode::None,
+                        0,
+                    );
+                    // IM popup doesn't need a11y adapter — mark ready immediately
+                    window.state.set_a11y_ready(true);
+                    let logical_size = window.logical_size();
+
+                    let ui = crate::build_user_interface(
+                        program,
+                        user_interface::Cache::default(),
+                        &mut window.renderer,
+                        logical_size,
+                        surface_id,
+                        window.raw.clone(),
+                        window.prev_dnd_destination_rectangles_count,
+                        clipboard,
+                    );
+
+                    let _ = user_interfaces.insert(surface_id, ui);
+                    window.raw.request_redraw();
+                }
+                InputMethodPopupEventVariant::Configure => {
+                    // Ack already happened in the Wayland dispatch handler.
+                    // Surface size follows content layout (via
+                    // reposition_im_popup_if_resized), not configure W×H.
+                    if let Some(id) = surface_ids.get(&surface.id()) {
+                        if let Some(window) = window_manager.get_mut(id.inner())
+                        {
+                            window.raw.request_redraw();
+                        }
+                    }
+                }
+                InputMethodPopupEventVariant::Done => {
+                    if let Some(id) = surface_ids.remove(&surface.id()) {
+                        if let Some(w) = window_manager.remove(id.inner()) {
+                            if clipboard
+                                .window_id()
+                                .is_some_and(|cid| w.raw.id() == cid)
+                            {
+                                *clipboard = Clipboard::unconnected();
+                            }
+                        }
+                        _ = user_interfaces.remove(&id.inner());
+                    }
+                }
+            },
         }
     }
+}
+
+#[cfg(feature = "wayland_input_method")]
+fn to_im_key_event(
+    key_event: &KeyEvent,
+) -> iced_runtime::core::event::wayland::input_method::KeyEvent {
+    iced_runtime::core::event::wayland::input_method::KeyEvent {
+        time: key_event.time,
+        raw_code: key_event.raw_code,
+        keysym: key_event.keysym.raw(),
+        utf8: key_event.utf8.clone(),
+    }
+}
+
+#[cfg(feature = "wayland_input_method")]
+fn to_im_key_parts(
+    key_event: KeyEvent,
+    mods: Modifiers,
+    serial: u32,
+) -> (
+    iced_runtime::core::event::wayland::input_method::KeyEvent,
+    Key,
+    iced_runtime::core::keyboard::Modifiers,
+    u32,
+) {
+    let (key, _) = keysym_to_vkey_location(key_event.keysym);
+    (
+        to_im_key_event(&key_event),
+        key,
+        modifiers_to_native(mods),
+        serial,
+    )
+}
+
+fn logical_size_request_changed(
+    requested: winit::dpi::LogicalSize<f32>,
+    requested_physical: winit::dpi::PhysicalSize<u32>,
+    physical: Size<u32>,
+) -> bool {
+    requested.width > 0.0
+        && requested.height > 0.0
+        && (requested_physical.width != physical.width
+            || requested_physical.height != physical.height)
 }
 
 fn keysym_to_vkey_location(keysym: Keysym) -> (Key, Location) {

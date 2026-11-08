@@ -351,6 +351,11 @@ impl SctkEventLoop {
                         }
                     };
 
+                #[cfg(feature = "wayland_input_method")]
+                let input_method_manager = crate::platform_specific::wayland::handlers::input_method::InputMethodManager::new(&globals, &qh).ok();
+                #[cfg(feature = "wayland_input_method")]
+                let keyboard_filter_manager: Option<wayland_protocols_experimental::keyboard_filter::v3::client::xx_keyboard_filter_manager_v1::XxKeyboardFilterManagerV1> = globals.bind(&qh, 1..=1, cctk::sctk::globals::GlobalData).ok();
+
                 let mut state = Self {
                     event_loop,
                     state: SctkState {
@@ -435,6 +440,19 @@ impl SctkEventLoop {
                         pending_delete: None,
                         pending_commit: None,
                         pending_blur: HashMap::new(),
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_manager,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        input_method_popup_settings: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        pending_popup_position_mode:
+                            iced_runtime::platform_specific::wayland::input_method::PopupPositionMode::FollowCursor,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter: None,
+                        #[cfg(feature = "wayland_input_method")]
+                        keyboard_filter_manager,
                     },
                     _features: Default::default(),
                 };
@@ -538,6 +556,17 @@ impl SctkEventLoop {
                         }
                     }
 
+                    #[cfg(feature = "wayland_input_method")]
+                    let im_popup = state
+                        .state
+                        .input_method_popup
+                        .as_ref()
+                        .map(|p| &p.wl_surface);
+                    #[cfg(not(feature = "wayland_input_method"))]
+                    let im_popup = None::<
+                        &cctk::sctk::reexports::client::protocol::wl_surface::WlSurface,
+                    >;
+
                     for s in
                         state
                             .state
@@ -556,6 +585,7 @@ impl SctkEventLoop {
                                     s.session_lock_surface.wl_surface()
                                 }),
                             )
+                            .chain(im_popup)
                     {
                         let id = s.id();
                         if state

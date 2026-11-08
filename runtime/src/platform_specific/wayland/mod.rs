@@ -7,6 +7,10 @@ use iced_core::{Rectangle, window::Id};
 /// activation Actions
 pub mod activation;
 
+/// input method actions
+#[cfg(feature = "wayland_input_method")]
+pub mod input_method;
+
 /// layer surface actions
 pub mod layer_surface;
 /// popup actions
@@ -37,6 +41,9 @@ pub enum Action {
     RoundedCorners(iced_core::window::Id, Option<CornerRadius>),
     /// Blur effect for a surface
     BlurSurface(Id, Option<Vec<Rectangle>>),
+    /// Input method action
+    #[cfg(feature = "wayland_input_method")]
+    InputMethod(input_method::Action),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -77,6 +84,10 @@ impl Debug for Action {
                 .field(id)
                 .field(rectangles)
                 .finish(),
+            #[cfg(feature = "wayland_input_method")]
+            Action::InputMethod(action) => {
+                f.debug_tuple("InputMethod").field(action).finish()
+            }
         }
     }
 }
